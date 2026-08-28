@@ -67,8 +67,6 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
             [
                 kIOHIDVendorIDKey as String: 0x19F5,
                 kIOHIDProductIDKey as String: 0x32F5,
-                kIOHIDDeviceUsagePageKey as String: 0xFF60,
-                kIOHIDDeviceUsageKey as String: 0x61,
             ],
         ]
     }
@@ -449,8 +447,8 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
             productName: productName(of: device),
             transport: transport(of: device),
             maxOutputReportSize: maxOutputReportSize(of: device),
-            usagePage: integerProperty(kIOHIDDeviceUsagePageKey, of: device),
-            usage: integerProperty(kIOHIDDeviceUsageKey, of: device),
+            usagePage: integerProperty(kIOHIDPrimaryUsagePageKey, of: device),
+            usage: integerProperty(kIOHIDPrimaryUsageKey, of: device),
             vendorID: integerProperty(kIOHIDVendorIDKey, of: device),
             productID: integerProperty(kIOHIDProductIDKey, of: device)
         )

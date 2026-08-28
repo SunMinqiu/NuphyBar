@@ -10,7 +10,7 @@ func localizedHIDError() {
             == "需要允许 NuphyBar 访问键盘 HID 接口")
 }
 
-@Test("the HID manager enumerates Bluetooth keyboards and Halo75 V2 Raw HID")
+@Test("the HID manager broadly enumerates Halo75 V2 interfaces before strict filtering")
 func scopedDeviceMatching() {
     let matching = NuPhyHIDTransport.deviceMatchingProperties
     #expect(matching.count == 2)
@@ -23,8 +23,7 @@ func scopedDeviceMatching() {
     let rawHID = matching[1]
     #expect(rawHID[kIOHIDVendorIDKey as String] as? Int == 0x19F5)
     #expect(rawHID[kIOHIDProductIDKey as String] as? Int == 0x32F5)
-    #expect(rawHID[kIOHIDDeviceUsagePageKey as String] as? Int == 0xFF60)
-    #expect(rawHID[kIOHIDDeviceUsageKey as String] as? Int == 0x61)
+    #expect(rawHID.count == 2)
 }
 
 @Test("compatible NuPhy models are selected by family and HID capability")
