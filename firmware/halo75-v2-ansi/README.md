@@ -49,4 +49,4 @@ The pinned Docker toolchain produces a 67,922-byte QMK payload and a 67,940-byte
 a3d3ae63b2d69029222db2cf6427a727261e6a6538218f621d6ede0dfb7e658c
 ```
 
-Two clean builds produced the same file byte for byte. The USB-only predecessor has a 67,718-byte payload, so Bluetooth support adds 204 bytes and no reported `.data` or `.bss`. The earlier USB firmware passed physical verification. This dual-transport build is awaiting Bluetooth and USB regression testing on the same keyboard.
+Two clean builds produced the same file byte for byte. The USB-only predecessor has a 67,718-byte payload, so Bluetooth support adds 204 bytes and no reported `.data` or `.bss`. The dual-transport build passed USB regression and core Bluetooth physical verification on the same keyboard on 2026-08-28. Verified Bluetooth behavior includes typing, Caps Lock, working, waiting/error, complete, idle restoration, and keyboard power-cycle reconnection. NuphyBar reopened the BLE HID session and resent state with zero output-report errors. Sleep/wake, BLE2/BLE3 channel switching, sustained typing, and official recovery remain pending.

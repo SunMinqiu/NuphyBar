@@ -40,16 +40,11 @@ The Halo75 V2 ANSI port uses seven distinct states over USB and a safe three-sta
 |---|---|---|---|
 | **Air60 V2 ANSI** | Bluetooth Low Energy | Supported | Five right-side RGB LEDs |
 | **Halo75 V2 ANSI QMK** | Wired USB Raw HID | Supported on the tested keyboard | Five upper-left RGB LEDs, indices 83–87 |
+| **Halo75 V2 ANSI QMK** | Bluetooth Low Energy | Core path verified; release validation pending | Five upper-left RGB LEDs, indices 83–87 |
 
-Bluetooth typing, the left Caps Lock indicator, every Agent state, reconnection, and sustained typing stability have been tested on real hardware.
+Air60 V2 Bluetooth typing, the left Caps Lock indicator, every Agent state, reconnection, and sustained typing stability have been tested on real hardware.
 
-### Implemented, awaiting physical verification
-
-| Model | Transport | Status | Light area |
-|---|---|---|---|
-| **Halo75 V2 ANSI QMK** | Bluetooth Low Energy | Source and reproducible firmware build verified | Five upper-left RGB LEDs, indices 83–87 |
-
-The Bluetooth path is not release-supported until typing, Caps Lock, every compact state, reconnect, sleep, channel switching, and recovery have been verified on the exact keyboard.
+Halo75 V2 Bluetooth typing, Caps Lock, all three compact states, idle restoration, and keyboard power-cycle reconnection were verified on the target keyboard on 2026-08-28. The app reopened the BLE HID session and resent the current state with zero output-report errors. Sleep/wake, BLE2/BLE3 channel switching, sustained typing, and official recovery remain before release support.
 
 ### Port-ready, but each model needs its own firmware
 
