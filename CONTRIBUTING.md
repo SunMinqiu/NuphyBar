@@ -13,7 +13,8 @@ Thanks for helping improve NuphyBar.
 ```bash
 swift test
 swift build -c release
-bash -n script/*.sh firmware/air60-v2/*.sh
+bash -n script/*.sh firmware/air60-v2/*.sh firmware/halo75-v2-ansi/*.sh
+./firmware/halo75-v2-ansi/test.sh
 ```
 
 ## Air60 V2 firmware checks

@@ -12,9 +12,9 @@
   <a href="https://x.com/Samoye">Maige on X</a>
 </p>
 
-NuphyBar is a lightweight native macOS menu-bar app. It receives lifecycle events from Codex, Claude Code, Antigravity, OpenCode, and other local agents, sends a standard Bluetooth keyboard LED output report when the state changes, and lets custom keyboard firmware render the animation locally.
+NuphyBar is a lightweight native macOS menu-bar app. It receives lifecycle events from Codex, Claude Code, Antigravity, OpenCode, and other local agents, sends one compact HID state report when the state changes, and lets custom keyboard firmware render the animation locally.
 
-It never reads keystrokes and does not stream animation frames over Bluetooth. The Mac sends one two-byte report per state change; the keyboard renders every animation frame itself.
+It never reads keystrokes and does not stream animation frames. The Mac sends one report per state change; the keyboard renders every animation frame itself.
 
 > [!IMPORTANT]
 > The firmware in the current Release is **only for the NuPhy Air60 V2 ANSI**. Never flash the Air60 V2 binary to an Air75 V2, Air96 V2, Halo, Gem80, or any other model. A firmware image for the wrong model can make the keyboard unusable.
@@ -30,6 +30,8 @@ It never reads keystrokes and does not stream animation frames over Bluetooth. T
 
 The stock cyan Caps Lock indicator remains on the left side. Agent state only uses the right side light.
 
+The Halo75 V2 ANSI USB port adds distinct local effects for thinking, tool execution, output, permission requests, completion, and errors. See [`firmware/halo75-v2-ansi`](firmware/halo75-v2-ansi) for its exact color plan and current verification status.
+
 ## Keyboard compatibility
 
 ### Implemented and physically verified
@@ -39,6 +41,14 @@ The stock cyan Caps Lock indicator remains on the left side. Agent state only us
 | **Air60 V2 ANSI** | Bluetooth Low Energy | Supported | Five right-side RGB LEDs |
 
 Bluetooth typing, the left Caps Lock indicator, every Agent state, reconnection, and sustained typing stability have been tested on real hardware.
+
+### Implemented, awaiting physical verification
+
+| Model | Transport | Status | Light area |
+|---|---|---|---|
+| **Halo75 V2 ANSI QMK** | Wired USB Raw HID | Source and firmware build verified | Five upper-left RGB LEDs, indices 83–87 |
+
+This port is not release-supported until typing, VIA layout retention, Caps Lock, every state, reconnect, sleep, and recovery have been verified on the exact keyboard.
 
 ### Port-ready, but each model needs its own firmware
 
@@ -54,7 +64,6 @@ These models can reuse NuphyBar's HID state protocol and effect model, but their
 | Model | Available lighting | Notes |
 |---|---|---|
 | Halo65 V2 QMK | Halolight / nameplate | Needs a ring or segmented effect rather than a five-step bar |
-| Halo75 V2 QMK | Halolight / nameplate | Requires model-specific firmware and effects |
 | Halo96 V2 QMK | Halolight / right light | NuPhy's firmware already contains a right-side Num Lock indication path |
 | Gem80 tri-mode | RGB light bar / nameplate | Only the Bluetooth-capable tri-mode variant is in scope |
 
@@ -63,7 +72,7 @@ These models can reuse NuphyBar's HID state protocol and effect model, but their
 - Air V1, Halo V1, Field75, and other models on the older NuPhy firmware line;
 - Air60 HE, Air75 HE, Field75 HE, and other HE/IO models;
 - Air V3, Halo V2 IO, Kick75 IO, BH65, and other NuPhy IO products;
-- the wired-only Gem80, because the current app implements BLE HID output only.
+- the wired-only Gem80, because USB support is currently scoped to the exact Halo75 V2 ANSI Raw HID profile.
 
 NuPhy IO and QMK are different firmware stacks. Having a light bar is not sufficient for this patch. See NuPhy's [firmware catalog](https://nuphy.com/pages/firmware) and [QMK firmware releases](https://nuphy.com/pages/qmk-firmwares).
 
@@ -76,10 +85,10 @@ flowchart TB
     A["① Agent hook records a lifecycle event"]
     B["② Atomic state file + macOS notification"]
     C["③ NuphyBar combines active sessions"]
-    D["④ Persistent HID session sends 2 bytes"]
+    D["④ Persistent HID session sends one state report"]
     E["⑤ Keyboard firmware renders every frame"]
     A --> B --> C --> D
-    D -->|Bluetooth LE| E
+    D -->|Bluetooth LED report or USB Raw HID| E
 ```
 
 | Component | Responsibility | What it does not do |
@@ -88,7 +97,7 @@ flowchart TB
 | NuphyBar | Combine concurrent sessions and send one report when the displayed state changes | Poll every second or stream animation frames |
 | Keyboard firmware | Turn a state into a wave, double pulse, or breathing animation | Read Agent content |
 
-In other words, Bluetooth carries “working,” not a continuous sequence such as “light LED 1, then LED 2.”
+In other words, HID carries “working,” not a continuous sequence such as “light LED 1, then LED 2.”
 
 The local state file is the durable source of truth; the macOS notification is only the wake-up signal. NuphyBar reads the file at launch and whenever a lifecycle event arrives, then creates one timer for the next state expiration. Normal operation has no Agent-state polling. If system notification registration fails, a five-second fallback poll keeps the app functional.
 
@@ -127,6 +136,12 @@ The complete report is only two bytes: `[Report ID 1, state mask]`. Caps Lock is
 
 Only the Num and Scroll bits are available, so the safe protocol supports three non-idle states. Error and waiting intentionally share the amber attention effect. A distinct fourth state would require a new wireless protocol rather than another value in this two-bit channel.
 
+### Halo75 V2 ANSI USB protocol
+
+The wired Halo port uses the existing QMK/VIA Raw HID interface at usage page `0xFF60`, usage `0x61`. Reports are 32 bytes, start with the `NB` signature and protocol version, carry one state byte, and end with an XOR checksum. The custom firmware changes the USB product string to `NuPhy Halo75 V2 NuphyBar`, so the app does not mistake stock firmware for a compatible device.
+
+Raw HID carries seven values: idle, thinking, tool running, outputting, permission required, complete, and error. The app still sends only when the displayed state changes. Hardware battery, Caps Lock, sleep, and radio indications run after the Agent overlay and therefore keep priority.
+
 ### Why this does not interfere with typing
 
 Early experiments streamed animation frames over Bluetooth. Real hardware eventually froze the light strip and stopped typing. The release design no longer does that:
@@ -164,7 +179,7 @@ Requirements:
 - macOS 14 or later;
 - an Apple Silicon Mac;
 - a NuPhy keyboard with compatible custom firmware;
-- a Bluetooth Low Energy keyboard connection, not USB.
+- Bluetooth Low Energy for the Air60 V2 port, or wired USB for the Halo75 V2 ANSI port.
 
 Steps:
 
@@ -194,7 +209,7 @@ The installer changes only entries that it owns or marks. It refuses to overwrit
 Display priority is:
 
 ```text
-error/waiting > working > complete > idle
+error/waiting > tool running > outputting > working > complete > idle
 ```
 
 One completed session never hides another session that is still working. Completion is retained for about 15 seconds, and stale active sessions are pruned automatically.
@@ -255,6 +270,15 @@ Download NuPhy's official Air60 V2 ANSI v2.1.5 firmware and run:
 
 The build runs effect and Thumb branch tests, validates the official baseline, compiles the hook, adds the DFU suffix, and verifies the final layout. GCC 8.5.0 reproduces the `stable-v7` Release binary byte for byte.
 
+For the Halo75 V2 ANSI USB port, use an official NuPhy QMK checkout and Docker or QMK CLI:
+
+```bash
+./firmware/halo75-v2-ansi/test.sh
+./firmware/halo75-v2-ansi/build.sh /path/to/nuphy-src/qmk_firmware
+```
+
+The builder accepts only the audited official commit and produces `NuphyBar-Halo75-V2-ANSI-USB.bin`. It does not flash the keyboard.
+
 ## Ask Codex or Claude Code to port/flash firmware
 
 Ready-to-use local coding-agent prompts and mandatory safety checkpoints are provided here:
@@ -280,9 +304,10 @@ See [`SECURITY.md`](SECURITY.md). Never attach sensitive local configuration to 
 Sources/
   AgentLightApp/      macOS menu app and settings UI
   AgentLightCore/     state aggregation, hook mapping, integration installer
-  AgentLightHID/      NuPhy BLE HID discovery and output reports
+  AgentLightHID/      NuPhy BLE and USB HID discovery and output reports
   AgentLightCLI/      short-lived helper bundled inside the app
 firmware/air60-v2/    stable-v7 hook, builder, verifier, and tests
+firmware/halo75-v2-ansi/ Halo75 USB overlay, builder, and tests
 Design/               source artwork for the app and menu-bar logos
 script/               app build, local install, and DMG packaging
 Tests/                Swift tests

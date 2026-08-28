@@ -7,4 +7,5 @@ __pycache__/
 work/
 outputs/
 firmware/**/build/
+NuphyBar-Halo75-V2-ANSI-USB.bin
 *.xcodeproj/

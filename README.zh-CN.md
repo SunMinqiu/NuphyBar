@@ -12,9 +12,9 @@
   <a href="https://x.com/Samoye">作者麦格</a>
 </p>
 
-NuphyBar 是一个轻量的原生 macOS 菜单栏应用。它接收 Codex、Claude Code、Antigravity、OpenCode 等 Agent 的生命周期事件，通过蓝牙键盘已有的标准 HID 指示灯输出报告发送状态，再由定制键盘固件在本地渲染侧灯动画。
+NuphyBar 是一个轻量的原生 macOS 菜单栏应用。它接收 Codex、Claude Code、Antigravity、OpenCode 等 Agent 的生命周期事件，在状态变化时发送一个简短的 HID 状态报告，再由定制键盘固件在本地渲染侧灯动画。
 
-它不会读取按键内容，也不会持续向键盘传输动画帧。Mac 只在状态改变时发送一个两字节报告；动画全部在键盘本地运行。
+它不会读取按键内容，也不会持续向键盘传输动画帧。Mac 只在状态改变时发送一次报告；动画全部在键盘本地运行。
 
 > [!IMPORTANT]
 > 当前 Release 中的键盘固件 **只适用于 NuPhy Air60 V2 ANSI**。不要把 Air60 V2 固件刷进 Air75 V2、Air96 V2、Halo、Gem80 或任何其他型号。刷错型号可能让键盘无法正常工作。
@@ -30,6 +30,8 @@ NuphyBar 是一个轻量的原生 macOS 菜单栏应用。它接收 Codex、Clau
 
 Caps Lock 的左侧青色提示保持原样。Agent 状态只占用右侧灯条。
 
+Halo75 V2 ANSI 有线版还可以分别显示思考、执行工具、输出、等待确认、完成和错误。准确颜色和当前验证状态见 [`firmware/halo75-v2-ansi`](firmware/halo75-v2-ansi)。
+
 ## 键盘兼容性
 
 ### 已完成并经过实机验证
@@ -39,6 +41,14 @@ Caps Lock 的左侧青色提示保持原样。Agent 状态只占用右侧灯条�
 | **Air60 V2 ANSI** | Bluetooth Low Energy | 正式支持 | 右侧五颗 RGB 灯 |
 
 已验证内容包括蓝牙输入、Caps Lock 左灯、工作/等待/完成/空闲状态、断开重连以及长时间打字稳定性。
+
+### 已实现，等待实机验证
+
+| 型号 | 连接 | 状态 | 灯光区域 |
+|---|---|---|---|
+| **Halo75 V2 ANSI QMK** | USB 有线 Raw HID | 源码和固件构建已验证 | 左上角五颗 RGB 灯，索引 83–87 |
+
+完成按键输入、VIA 布局保留、Caps Lock、全部状态、重连、睡眠和官方恢复测试前，这个移植不会标记为正式支持。
 
 ### 可以移植，但必须制作对应型号的专用固件
 
@@ -54,7 +64,6 @@ Caps Lock 的左侧青色提示保持原样。Agent 状态只占用右侧灯条�
 | 型号 | 可使用的灯光 | 说明 |
 |---|---|---|
 | Halo65 V2 QMK | Halolight / 铭牌灯 | 不是五格侧灯，需要环形或分区动画 |
-| Halo75 V2 QMK | Halolight / 铭牌灯 | 需要型号专用固件和效果 |
 | Halo96 V2 QMK | Halolight / 右侧灯 | 官方固件已有 Num Lock 右侧灯逻辑，协议路径可信 |
 | Gem80 三模版 | RGB 灯条 / 铭牌灯 | 只考虑带蓝牙的三模版 |
 
@@ -63,7 +72,7 @@ Caps Lock 的左侧青色提示保持原样。Agent 状态只占用右侧灯条�
 - Air V1、Halo V1、Field75 等旧 NuPhy 固件型号；
 - Air60 HE、Air75 HE、Field75 HE 等 HE/IO 型号；
 - Air V3、Halo V2 IO、Kick75 IO、BH65 等 NuPhy IO 产品；
-- Gem80 纯有线版（NuphyBar 当前只实现 BLE HID 输出）。
+- Gem80 纯有线版。目前的 USB 支持只匹配 Halo75 V2 ANSI 的准确 Raw HID 配置。
 
 NuPhy IO 与 QMK 是不同固件体系。硬件上“有灯”不代表能直接使用本项目的 QMK 补丁。型号判断依据见 [NuPhy 官方固件页面](https://nuphy.com/pages/firmware) 和 [QMK 固件发布页](https://nuphy.com/pages/qmk-firmwares)。
 
@@ -76,10 +85,10 @@ flowchart TB
     A["① Agent Hook 记录生命周期事件"]
     B["② 原子写入状态文件 + macOS 系统通知"]
     C["③ NuphyBar 合并所有活跃会话"]
-    D["④ 持久 HID 会话发送 2 字节"]
+    D["④ 持久 HID 会话发送一次状态报告"]
     E["⑤ 键盘固件在本地渲染每一帧"]
     A --> B --> C --> D
-    D -->|Bluetooth LE| E
+    D -->|蓝牙 LED 报告或 USB Raw HID| E
 ```
 
 | 部分 | 负责什么 | 不做什么 |
@@ -88,7 +97,7 @@ flowchart TB
 | NuphyBar | 聚合多个会话，并在显示状态改变时发送一次报告 | 不每秒轮询，也不连续发送动画帧 |
 | 键盘固件 | 把状态变成波浪、双脉冲或呼吸动画 | 不读取 Agent 内容 |
 
-换句话说，蓝牙上传输的是“工作中”，而不是“第一颗灯亮、第二颗灯亮……”这样的每一帧。
+换句话说，HID 上传输的是“工作中”，而不是“第一颗灯亮、第二颗灯亮……”这样的每一帧。
 
 本地状态文件是可靠的状态存档，macOS 通知只负责“叫醒”应用。NuphyBar 会在启动和收到生命周期事件时读取状态，并只为下一次状态过期建立一个定时器。正常情况下不再轮询 Agent 状态；只有系统通知注册失败时，才启用五秒一次的兜底检查。
 
@@ -127,6 +136,12 @@ NuphyBar 没有给蓝牙增加私有 GATT 服务，而是复用键盘本来就�
 
 只有 Num 与 Scroll 两个可用位，所以目前只能可靠表达三个非空闲状态。错误与等待批准共用琥珀色提醒；如果要增加独立错误灯，必须设计新的无线通信协议，不能继续只靠这两个标准位。
 
+### Halo75 V2 ANSI USB 协议
+
+Halo 有线版复用 QMK/VIA 已有的 Raw HID 接口，Usage Page 为 `0xFF60`，Usage 为 `0x61`。每个报告固定 32 字节，以 `NB` 签名和协议版本开头，包含一个状态字节，并以 XOR 校验结尾。定制固件会把 USB 产品名称改为 `NuPhy Halo75 V2 NuphyBar`，应用不会把原厂固件误判为兼容设备。
+
+Raw HID 可以表达空闲、思考、执行工具、输出、等待确认、完成和错误七种状态。应用仍然只在最终显示状态变化时发送一次。固件的电量、Caps Lock、睡眠和无线提示在 Agent 覆盖层之后执行，因此始终具有更高优先级。
+
 ### 为什么不会影响打字
 
 早期实验曾通过蓝牙连续传输动画帧，真实键盘出现过灯条冻结和停止输入。正式方案不再这样做：
@@ -163,8 +178,8 @@ NuphyBar 没有给蓝牙增加私有 GATT 服务，而是复用键盘本来就�
 
 - macOS 14 或更高版本；
 - Apple Silicon Mac；
-- 已刷入兼容固件的 NuPhy 蓝牙键盘；
-- 键盘通过 Bluetooth Low Energy 连接，而不是 USB。
+- 已刷入兼容固件的 NuPhy 键盘；
+- Air60 V2 使用 Bluetooth Low Energy，Halo75 V2 ANSI 使用 USB 有线连接。
 
 步骤：
 
@@ -194,7 +209,7 @@ NuphyBar 没有给蓝牙增加私有 GATT 服务，而是复用键盘本来就�
 状态聚合优先级为：
 
 ```text
-错误/等待 > 工作中 > 完成 > 空闲
+错误/等待 > 执行工具 > 输出 > 工作中 > 完成 > 空闲
 ```
 
 多个 Agent 同时运行时，一个会话完成不会错误地盖住另一个仍在工作的会话。完成状态保留约 15 秒，过期的活动会话会自动清理。
@@ -255,6 +270,15 @@ brew install arm-none-eabi-gcc@8 arm-none-eabi-binutils dfu-util
 
 构建过程会先运行灯效和 Thumb 跳转编码测试，再校验官方基线、编译 Hook、添加 DFU 后缀并验证最终布局。使用 GCC 8.5.0 时应逐字生成 Release 中的 `stable-v7` 文件。
 
+Halo75 V2 ANSI USB 版需要 NuPhy 官方 QMK 源码和 Docker 或 QMK CLI：
+
+```bash
+./firmware/halo75-v2-ansi/test.sh
+./firmware/halo75-v2-ansi/build.sh /path/to/nuphy-src/qmk_firmware
+```
+
+构建器只接受经过审查的官方提交，并生成 `NuphyBar-Halo75-V2-ANSI-USB.bin`。脚本不会刷写键盘。
+
 ## 让 Codex / Claude Code 帮你适配或刷固件
 
 仓库提供了可以直接交给本地编码 Agent 的任务模板和安全检查点：
@@ -280,9 +304,10 @@ brew install arm-none-eabi-gcc@8 arm-none-eabi-binutils dfu-util
 Sources/
   AgentLightApp/      macOS 菜单栏 App 与设置界面
   AgentLightCore/     Agent 状态聚合、Hook 映射与接入安装器
-  AgentLightHID/      NuPhy BLE HID 设备发现与 Output Report
+  AgentLightHID/      NuPhy BLE 与 USB HID 设备发现和报告发送
   AgentLightCLI/      App 内置的短生命周期 Hook helper
 firmware/air60-v2/    Air60 V2 stable-v7 Hook、构建器与测试
+firmware/halo75-v2-ansi/ Halo75 USB 覆盖层、构建器与测试
 Design/               NuphyBar App 和菜单栏 Logo 源文件
 script/               App 构建、运行和 DMG 打包脚本
 Tests/                Swift 测试
