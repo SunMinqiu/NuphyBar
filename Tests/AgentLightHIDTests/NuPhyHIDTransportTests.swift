@@ -10,13 +10,21 @@ func localizedHIDError() {
             == "需要允许 NuphyBar 访问键盘 HID 接口")
 }
 
-@Test("the HID manager only enumerates Bluetooth keyboards")
+@Test("the HID manager enumerates Bluetooth keyboards and Halo75 V2 Raw HID")
 func scopedDeviceMatching() {
     let matching = NuPhyHIDTransport.deviceMatchingProperties
-    #expect(matching[kIOHIDTransportKey as String] as? String == "Bluetooth Low Energy")
-    #expect(matching[kIOHIDDeviceUsagePageKey as String] as? Int == 1)
-    #expect(matching[kIOHIDDeviceUsageKey as String] as? Int == 6)
-    #expect(matching[kIOHIDProductKey as String] == nil)
+    #expect(matching.count == 2)
+
+    let bluetooth = matching[0]
+    #expect(bluetooth[kIOHIDTransportKey as String] as? String == "Bluetooth Low Energy")
+    #expect(bluetooth[kIOHIDDeviceUsagePageKey as String] as? Int == 1)
+    #expect(bluetooth[kIOHIDDeviceUsageKey as String] as? Int == 6)
+
+    let rawHID = matching[1]
+    #expect(rawHID[kIOHIDVendorIDKey as String] as? Int == 0x19F5)
+    #expect(rawHID[kIOHIDProductIDKey as String] as? Int == 0x32F5)
+    #expect(rawHID[kIOHIDDeviceUsagePageKey as String] as? Int == 0xFF60)
+    #expect(rawHID[kIOHIDDeviceUsageKey as String] as? Int == 0x61)
 }
 
 @Test("compatible NuPhy models are selected by family and HID capability")
@@ -40,6 +48,33 @@ func compatibleNuPhyKeyboards() {
         productName: "NuPhy Air60 V2-1",
         transport: "USB",
         maxOutputReportSize: 2
+    ))
+    #expect(NuPhyHIDTransport.isCompatible(
+        productName: "NuPhy Halo75 V2 NuphyBar",
+        transport: "USB",
+        maxOutputReportSize: 32,
+        usagePage: 0xFF60,
+        usage: 0x61,
+        vendorID: 0x19F5,
+        productID: 0x32F5
+    ))
+    #expect(!NuPhyHIDTransport.isCompatible(
+        productName: "NuPhy Halo75 V2",
+        transport: "USB",
+        maxOutputReportSize: 32,
+        usagePage: 0xFF60,
+        usage: 0x61,
+        vendorID: 0x19F5,
+        productID: 0x32F5
+    ))
+    #expect(!NuPhyHIDTransport.isCompatible(
+        productName: "NuPhy Halo75 V2 NuphyBar",
+        transport: "USB",
+        maxOutputReportSize: 32,
+        usagePage: 1,
+        usage: 6,
+        vendorID: 0x19F5,
+        productID: 0x32F5
     ))
     #expect(!NuPhyHIDTransport.isCompatible(
         productName: "NuPhy Air60 V2-1",

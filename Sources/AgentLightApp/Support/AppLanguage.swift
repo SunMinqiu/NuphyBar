@@ -19,6 +19,7 @@ enum AppText {
     case connectionStatus
     case lightStatus
     case bluetoothConnected
+    case wiredConnected
     case checkAgain
     case allowAccess
     case nuphyKeyboard
@@ -27,10 +28,21 @@ enum AppText {
     case keyboardNotFound
     case working
     case blueFlow
+    case thinking
+    case redBreath
+    case toolRunning
+    case solidRed
+    case outputting
+    case yellowBreath
     case waiting
     case amberFlash
+    case permissionRequired
+    case blueFastBreath
     case taskComplete
     case greenBreath
+    case solidGreen
+    case error
+    case redFlash
     case idle
     case factoryEffect
     case language
@@ -106,6 +118,8 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         case (.english, .lightStatus): "Light Status"
         case (.simplifiedChinese, .bluetoothConnected): "蓝牙已连接"
         case (.english, .bluetoothConnected): "Bluetooth Connected"
+        case (.simplifiedChinese, .wiredConnected): "有线已连接"
+        case (.english, .wiredConnected): "USB Connected"
         case (.simplifiedChinese, .checkAgain): "重新检测"
         case (.english, .checkAgain): "Check Again"
         case (.simplifiedChinese, .allowAccess): "允许访问"
@@ -122,14 +136,36 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         case (.english, .working): "Working"
         case (.simplifiedChinese, .blueFlow): "蓝色流光"
         case (.english, .blueFlow): "Blue Flow"
+        case (.simplifiedChinese, .thinking): "正在思考"
+        case (.english, .thinking): "Thinking"
+        case (.simplifiedChinese, .redBreath): "红色慢呼吸"
+        case (.english, .redBreath): "Slow Red Breath"
+        case (.simplifiedChinese, .toolRunning): "执行工具"
+        case (.english, .toolRunning): "Tool Running"
+        case (.simplifiedChinese, .solidRed): "红色常亮"
+        case (.english, .solidRed): "Solid Red"
+        case (.simplifiedChinese, .outputting): "正在输出"
+        case (.english, .outputting): "Outputting"
+        case (.simplifiedChinese, .yellowBreath): "黄色慢呼吸"
+        case (.english, .yellowBreath): "Slow Yellow Breath"
         case (.simplifiedChinese, .waiting): "等待操作"
         case (.english, .waiting): "Waiting"
         case (.simplifiedChinese, .amberFlash): "琥珀闪烁"
         case (.english, .amberFlash): "Amber Flash"
+        case (.simplifiedChinese, .permissionRequired): "等待确认"
+        case (.english, .permissionRequired): "Permission Required"
+        case (.simplifiedChinese, .blueFastBreath): "蓝色快呼吸"
+        case (.english, .blueFastBreath): "Fast Blue Breath"
         case (.simplifiedChinese, .taskComplete): "任务完成"
         case (.english, .taskComplete): "Complete"
         case (.simplifiedChinese, .greenBreath): "绿色呼吸"
         case (.english, .greenBreath): "Green Breath"
+        case (.simplifiedChinese, .solidGreen): "绿色常亮"
+        case (.english, .solidGreen): "Solid Green"
+        case (.simplifiedChinese, .error): "发生错误"
+        case (.english, .error): "Error"
+        case (.simplifiedChinese, .redFlash): "红色快闪"
+        case (.english, .redFlash): "Fast Red Flash"
         case (.simplifiedChinese, .idle): "待机"
         case (.english, .idle): "Idle"
         case (.simplifiedChinese, .factoryEffect): "恢复原厂灯效"

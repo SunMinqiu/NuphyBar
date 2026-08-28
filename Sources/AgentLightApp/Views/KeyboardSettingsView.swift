@@ -44,7 +44,7 @@ struct KeyboardSettingsView: View {
             }
 
             SettingsGroup(title: language.text(.lightStatus)) {
-                LightStatusList()
+                LightStatusList(richStates: usesHalo75V2USBProtocol)
             }
 
             if let keyboardError = model.keyboardError {
@@ -64,25 +64,41 @@ struct KeyboardSettingsView: View {
     }
 
     private var statusText: String {
-        if model.isConnected { return language.text(.bluetoothConnected) }
+        if model.isConnected {
+            return language.text(usesHalo75V2USBProtocol ? .wiredConnected : .bluetoothConnected)
+        }
         switch model.hidAccessState {
         case .unknown: return language.text(.checkingKeyboard)
         case .denied: return language.text(.accessRequired)
         case .granted: return language.text(.keyboardNotFound)
         }
     }
+
+    private var usesHalo75V2USBProtocol: Bool {
+        model.keyboardModel?.caseInsensitiveCompare("NuPhy Halo75 V2 NuphyBar") == .orderedSame
+    }
 }
 
 private struct LightStatusList: View {
     @Environment(\.appLanguage) private var language
+    let richStates: Bool
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
             VStack(spacing: 0) {
-                row(.working, title: language.text(.working), detail: language.text(.blueFlow), time: time)
-                row(.waiting, title: language.text(.waiting), detail: language.text(.amberFlash), time: time)
-                row(.complete, title: language.text(.taskComplete), detail: language.text(.greenBreath), time: time)
+                if richStates {
+                    row(.thinking, title: language.text(.thinking), detail: language.text(.redBreath), time: time)
+                    row(.toolRunning, title: language.text(.toolRunning), detail: language.text(.solidRed), time: time)
+                    row(.outputting, title: language.text(.outputting), detail: language.text(.yellowBreath), time: time)
+                    row(.waiting, title: language.text(.permissionRequired), detail: language.text(.blueFastBreath), time: time)
+                    row(.complete, title: language.text(.taskComplete), detail: language.text(.solidGreen), time: time)
+                    row(.error, title: language.text(.error), detail: language.text(.redFlash), time: time)
+                } else {
+                    row(.working, title: language.text(.working), detail: language.text(.blueFlow), time: time)
+                    row(.waiting, title: language.text(.waiting), detail: language.text(.amberFlash), time: time)
+                    row(.complete, title: language.text(.taskComplete), detail: language.text(.greenBreath), time: time)
+                }
                 row(.idle, title: language.text(.idle), detail: language.text(.factoryEffect), time: time)
             }
         }

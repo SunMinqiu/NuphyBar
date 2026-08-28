@@ -198,7 +198,7 @@ final class AppModel {
             keyboardError = nil
             if shouldReplayState {
                 deliveryState.connectionRestored()
-                hidLogger.info("NuPhy Bluetooth keyboard HID session is ready")
+                hidLogger.info("NuPhy keyboard HID session is ready")
                 applyAgentStateIfChanged()
             }
 

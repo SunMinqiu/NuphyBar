@@ -20,7 +20,7 @@ public enum NuPhyHIDError: LocalizedError, CustomStringConvertible, Equatable, S
         switch self {
         case .permissionDenied: return "keyboard HID access has not been granted"
         case .managerOpenFailed(let status): return "could not open the HID manager (\(hex(status)))"
-        case .deviceNotConnected: return "no compatible NuPhy Bluetooth keyboard is connected"
+        case .deviceNotConnected: return "no compatible NuPhy keyboard is connected"
         case .reportFailed(let status): return "sending a keyboard report failed (\(hex(status)))"
         }
     }
@@ -51,12 +51,25 @@ public enum NuPhyHIDConnectionState: Equatable, Sendable {
     case unavailable(NuPhyHIDError)
 }
 
+enum NuPhyHIDDeviceProfile: Int, Equatable, Sendable {
+    case halo75V2USB = 0
+    case bluetoothKeyboardLED = 1
+}
+
 public final class NuPhyHIDTransport: @unchecked Sendable {
-    static var deviceMatchingProperties: [String: Any] {
+    static var deviceMatchingProperties: [[String: Any]] {
         [
-            kIOHIDTransportKey as String: "Bluetooth Low Energy",
-            kIOHIDDeviceUsagePageKey as String: 1,
-            kIOHIDDeviceUsageKey as String: 6,
+            [
+                kIOHIDTransportKey as String: "Bluetooth Low Energy",
+                kIOHIDDeviceUsagePageKey as String: 1,
+                kIOHIDDeviceUsageKey as String: 6,
+            ],
+            [
+                kIOHIDVendorIDKey as String: 0x19F5,
+                kIOHIDProductIDKey as String: 0x32F5,
+                kIOHIDDeviceUsagePageKey as String: 0xFF60,
+                kIOHIDDeviceUsageKey as String: 0x61,
+            ],
         ]
     }
 
@@ -68,6 +81,7 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
     private var activeSessionID: UUID?
     private var cancellingSessionID: UUID?
     private var currentDevice: IOHIDDevice?
+    private var currentDeviceProfile: NuPhyHIDDeviceProfile?
     private var recoveryProductName: String?
     private var currentState: NuPhyHIDConnectionState?
     private var reconnectBackoff = HIDReconnectBackoff()
@@ -111,14 +125,50 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
     static func isCompatible(
         productName: String?,
         transport: String?,
-        maxOutputReportSize: Int?
+        maxOutputReportSize: Int?,
+        usagePage: Int? = nil,
+        usage: Int? = nil,
+        vendorID: Int? = nil,
+        productID: Int? = nil
     ) -> Bool {
+        profile(
+            productName: productName,
+            transport: transport,
+            maxOutputReportSize: maxOutputReportSize,
+            usagePage: usagePage,
+            usage: usage,
+            vendorID: vendorID,
+            productID: productID
+        ) != nil
+    }
+
+    static func profile(
+        productName: String?,
+        transport: String?,
+        maxOutputReportSize: Int?,
+        usagePage: Int?,
+        usage: Int?,
+        vendorID: Int?,
+        productID: Int?
+    ) -> NuPhyHIDDeviceProfile? {
         guard let productName,
               productName.range(of: "NuPhy", options: [.anchored, .caseInsensitive]) != nil,
-              transport == "Bluetooth Low Energy",
-              let maxOutputReportSize,
-              maxOutputReportSize >= 2 else { return false }
-        return true
+              let maxOutputReportSize else { return nil }
+
+        if transport == "USB",
+           productName.caseInsensitiveCompare("NuPhy Halo75 V2 NuphyBar") == .orderedSame,
+           vendorID == 0x19F5,
+           productID == 0x32F5,
+           usagePage == 0xFF60,
+           usage == 0x61,
+           maxOutputReportSize >= Halo75V2RawHIDProtocol.reportLength {
+            return .halo75V2USB
+        }
+
+        if transport == "Bluetooth Low Energy", maxOutputReportSize >= 2 {
+            return .bluetoothKeyboardLED
+        }
+        return nil
     }
 
     public func refresh() {
@@ -141,10 +191,13 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
             let name = productName(of: device) ?? "NuPhy keyboard"
             let transport = transport(of: device) ?? "unknown"
             let maxOutput = maxOutputReportSize(of: device)
+            let reportDescription = currentDeviceProfile == .halo75V2USB
+                ? "Raw HID output, report ID 0"
+                : "Keyboard LED output, report ID 1"
             return [
                 "Device: \(name)",
                 "Transport: \(transport)",
-                "Output report: 1",
+                "Protocol: \(reportDescription)",
                 "Max output report size: \(maxOutput.map(String.init) ?? "unknown") bytes",
             ].joined(separator: "\n")
         }
@@ -152,9 +205,6 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
 
     public func send(_ command: AgentLightCommand) throws {
         try AgentLightTransmissionLock().withLock {
-            let capsLockOn = CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift)
-            let mask = DirectStatusEncoder.encode(command, capsLockOn: capsLockOn)
-
             try queue.sync {
                 guard Self.accessState == .granted else {
                     refreshManager()
@@ -163,9 +213,23 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
                 guard let currentDevice else {
                     throw NuPhyHIDError.deviceNotConnected
                 }
+                guard let currentDeviceProfile else {
+                    throw NuPhyHIDError.deviceNotConnected
+                }
 
                 do {
-                    try setOutputReport(mask, on: currentDevice)
+                    switch currentDeviceProfile {
+                    case .halo75V2USB:
+                        try setRawOutputReport(
+                            Halo75V2RawHIDProtocol.encode(command),
+                            on: currentDevice
+                        )
+                    case .bluetoothKeyboardLED:
+                        let capsLockOn = CGEventSource.flagsState(.combinedSessionState)
+                            .contains(.maskAlphaShift)
+                        let mask = DirectStatusEncoder.encode(command, capsLockOn: capsLockOn)
+                        try setKeyboardLEDOutputReport(mask, on: currentDevice)
+                    }
                     reconnectBackoff.reset()
                 } catch let error as NuPhyHIDError {
                     recoverFromReportFailure(error, productName: productName(of: currentDevice))
@@ -183,7 +247,10 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
         }
 
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
-        IOHIDManagerSetDeviceMatching(manager, Self.deviceMatchingProperties as CFDictionary)
+        IOHIDManagerSetDeviceMatchingMultiple(
+            manager,
+            Self.deviceMatchingProperties as CFArray
+        )
         let status = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         guard status == kIOReturnSuccess else {
             publish(.unavailable(.managerOpenFailed(status)))
@@ -220,6 +287,7 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
         guard Self.accessState == .granted else {
             recoveryProductName = nil
             currentDevice = nil
+            currentDeviceProfile = nil
             reconnectBackoff.reset()
             pendingRestartDelay = nil
             restartWorkItem?.cancel()
@@ -274,8 +342,11 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
     private func selectConnectedDevice(from manager: IOHIDManager, sessionID: UUID) {
         guard activeSessionID == sessionID else { return }
         guard let devices = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice>,
-              let device = devices.first(where: isCompatible) else {
+              let device = devices
+                .filter(isCompatible)
+                .min(by: { profile(of: $0).rawValue < profile(of: $1).rawValue }) else {
             currentDevice = nil
+            currentDeviceProfile = nil
             recoveryProductName = nil
             publish(.disconnected)
             return
@@ -284,11 +355,15 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
     }
 
     private func handleMatchedDevice(_ device: IOHIDDevice, sessionID: UUID) {
-        guard activeSessionID == sessionID, isCompatible(device) else { return }
+        guard activeSessionID == sessionID, let matchedProfile = optionalProfile(of: device) else { return }
         if let currentDevice, CFEqual(currentDevice, device) { return }
+        if let currentDeviceProfile, currentDeviceProfile.rawValue <= matchedProfile.rawValue {
+            return
+        }
 
         let wasRecovering = recoveryProductName != nil
         currentDevice = device
+        currentDeviceProfile = matchedProfile
         recoveryProductName = nil
         if !wasRecovering {
             reconnectBackoff.reset()
@@ -304,8 +379,13 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
               let currentDevice,
               CFEqual(currentDevice, device) else { return }
         self.currentDevice = nil
+        currentDeviceProfile = nil
         recoveryProductName = nil
         reconnectBackoff.reset()
+        if let manager {
+            selectConnectedDevice(from: manager, sessionID: sessionID)
+            return
+        }
         publish(.disconnected)
     }
 
@@ -313,6 +393,7 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
         let productName = productName ?? "NuPhy 键盘"
         recoveryProductName = productName
         currentDevice = nil
+        currentDeviceProfile = nil
         publish(.connected(
             productName: productName,
             delivery: .recovering(error)
@@ -356,10 +437,22 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
     }
 
     private func isCompatible(_ device: IOHIDDevice) -> Bool {
-        Self.isCompatible(
+        optionalProfile(of: device) != nil
+    }
+
+    private func profile(of device: IOHIDDevice) -> NuPhyHIDDeviceProfile {
+        optionalProfile(of: device)!
+    }
+
+    private func optionalProfile(of device: IOHIDDevice) -> NuPhyHIDDeviceProfile? {
+        Self.profile(
             productName: productName(of: device),
             transport: transport(of: device),
-            maxOutputReportSize: maxOutputReportSize(of: device)
+            maxOutputReportSize: maxOutputReportSize(of: device),
+            usagePage: integerProperty(kIOHIDDeviceUsagePageKey, of: device),
+            usage: integerProperty(kIOHIDDeviceUsageKey, of: device),
+            vendorID: integerProperty(kIOHIDVendorIDKey, of: device),
+            productID: integerProperty(kIOHIDProductIDKey, of: device)
         )
     }
 
@@ -372,11 +465,15 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
     }
 
     private func maxOutputReportSize(of device: IOHIDDevice) -> Int? {
-        IOHIDDeviceGetProperty(device, kIOHIDMaxOutputReportSizeKey as CFString)
+        integerProperty(kIOHIDMaxOutputReportSizeKey, of: device)
+    }
+
+    private func integerProperty(_ key: String, of device: IOHIDDevice) -> Int? {
+        IOHIDDeviceGetProperty(device, key as CFString)
             .flatMap { $0 as? NSNumber }?.intValue
     }
 
-    private func setOutputReport(_ mask: UInt8, on device: IOHIDDevice) throws {
+    private func setKeyboardLEDOutputReport(_ mask: UInt8, on device: IOHIDDevice) throws {
         var report: [UInt8] = [1, mask]
         let reportCount = report.count
         let status = report.withUnsafeMutableBytes { bytes in
@@ -384,6 +481,23 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
                 device,
                 kIOHIDReportTypeOutput,
                 1,
+                bytes.bindMemory(to: UInt8.self).baseAddress!,
+                reportCount
+            )
+        }
+        guard status == kIOReturnSuccess else {
+            throw NuPhyHIDError.reportFailed(status)
+        }
+    }
+
+    private func setRawOutputReport(_ report: [UInt8], on device: IOHIDDevice) throws {
+        var report = report
+        let reportCount = report.count
+        let status = report.withUnsafeMutableBytes { bytes in
+            IOHIDDeviceSetReport(
+                device,
+                kIOHIDReportTypeOutput,
+                0,
                 bytes.bindMemory(to: UInt8.self).baseAddress!,
                 reportCount
             )

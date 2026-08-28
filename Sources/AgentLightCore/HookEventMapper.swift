@@ -57,8 +57,10 @@ public enum HookEventMapper {
 
     private static func status(provider: AgentProvider, eventName: String) -> AgentSessionStatus? {
         switch (provider, eventName) {
-        case (.codex, "UserPromptSubmit"), (.codex, "PreToolUse"), (.codex, "PostToolUse"):
+        case (.codex, "UserPromptSubmit"), (.codex, "PostToolUse"):
             return .working
+        case (.codex, "PreToolUse"):
+            return .toolRunning
         case (.codex, "PermissionRequest"):
             return .waiting
         case (.codex, "Stop"):

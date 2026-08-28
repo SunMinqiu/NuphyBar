@@ -21,6 +21,16 @@ func attentionPriorities() {
     #expect(state.displayCommand(now: 102) == .error)
 }
 
+@Test("tool execution and output have distinct rich commands")
+func richWorkingStates() {
+    var state = AgentState()
+    state.apply(.init(provider: .codex, sessionID: "one", status: .outputting), now: 100)
+    #expect(state.displayCommand(now: 100) == .outputting)
+
+    state.apply(.init(provider: .claudeCode, sessionID: "two", status: .toolRunning), now: 101)
+    #expect(state.displayCommand(now: 101) == .toolRunning)
+}
+
 @Test("idle removes a session and expired states are pruned")
 func idleAndExpiry() {
     var state = AgentState()

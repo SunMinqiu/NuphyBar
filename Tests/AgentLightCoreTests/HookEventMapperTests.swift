@@ -20,6 +20,7 @@ func codexHookMapping() throws {
     let payload = Data(#"{"session_id":"codex-1"}"#.utf8)
 
     #expect(try HookEventMapper.map(provider: .codex, eventName: "UserPromptSubmit", payload: payload)?.status == .working)
+    #expect(try HookEventMapper.map(provider: .codex, eventName: "PreToolUse", payload: payload)?.status == .toolRunning)
     #expect(try HookEventMapper.map(provider: .codex, eventName: "PermissionRequest", payload: payload)?.status == .waiting)
     #expect(try HookEventMapper.map(provider: .codex, eventName: "PostToolUse", payload: payload)?.status == .working)
     #expect(try HookEventMapper.map(provider: .codex, eventName: "Stop", payload: payload)?.status == .complete)
