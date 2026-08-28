@@ -31,12 +31,42 @@ func compatibleNuPhyKeyboards() {
     #expect(NuPhyHIDTransport.isCompatible(
         productName: "NuPhy Air60 V2-1",
         transport: "Bluetooth Low Energy",
-        maxOutputReportSize: 2
+        maxOutputReportSize: 2,
+        vendorID: 0x19F5
     ))
     #expect(NuPhyHIDTransport.isCompatible(
         productName: "NuPhy Halo75 V2",
         transport: "Bluetooth Low Energy",
-        maxOutputReportSize: 8
+        maxOutputReportSize: 8,
+        vendorID: 0x19F5,
+        productID: 0x3246
+    ))
+    #expect(NuPhyHIDTransport.isCompatible(
+        productName: "NuPhy Halo75 V2-3",
+        transport: "Bluetooth Low Energy",
+        maxOutputReportSize: 8,
+        vendorID: 0x19F5,
+        productID: 0x3246
+    ))
+    #expect(!NuPhyHIDTransport.isCompatible(
+        productName: "NuPhy Air75 V2-1",
+        transport: "Bluetooth Low Energy",
+        maxOutputReportSize: 2,
+        vendorID: 0x19F5
+    ))
+    #expect(!NuPhyHIDTransport.isCompatible(
+        productName: "NuPhy Halo75 V2 prototype",
+        transport: "Bluetooth Low Energy",
+        maxOutputReportSize: 8,
+        vendorID: 0x19F5,
+        productID: 0x3246
+    ))
+    #expect(!NuPhyHIDTransport.isCompatible(
+        productName: "NuPhy Halo75 V2-1",
+        transport: "Bluetooth Low Energy",
+        maxOutputReportSize: 8,
+        vendorID: 0x05AC,
+        productID: 0x3246
     ))
     #expect(!NuPhyHIDTransport.isCompatible(
         productName: "Apple Internal Keyboard / Trackpad",
@@ -78,7 +108,8 @@ func compatibleNuPhyKeyboards() {
     #expect(!NuPhyHIDTransport.isCompatible(
         productName: "NuPhy Air60 V2-1",
         transport: "Bluetooth Low Energy",
-        maxOutputReportSize: 1
+        maxOutputReportSize: 1,
+        vendorID: 0x19F5
     ))
 }
 

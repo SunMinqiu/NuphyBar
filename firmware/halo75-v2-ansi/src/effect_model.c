@@ -52,6 +52,29 @@ bool agent_light_decode_report(const uint8_t *report, size_t length,
     return true;
 }
 
+agent_light_state_t agent_light_decode_wireless_led(uint8_t led_mask) {
+    switch (led_mask & 0x05) {
+        case 0x01:
+            return AGENT_LIGHT_THINKING;
+        case 0x04:
+            return AGENT_LIGHT_PERMISSION;
+        case 0x05:
+            return AGENT_LIGHT_COMPLETE;
+        default:
+            return AGENT_LIGHT_IDLE;
+    }
+}
+
+agent_light_state_t agent_light_select_transport_state(
+    bool is_usb, bool is_connected_bluetooth, uint8_t wireless_led_mask,
+    agent_light_state_t usb_state) {
+    if (is_usb) return usb_state;
+    if (is_connected_bluetooth) {
+        return agent_light_decode_wireless_led(wireless_led_mask);
+    }
+    return AGENT_LIGHT_IDLE;
+}
+
 bool agent_light_model_render(agent_light_state_t state, uint32_t elapsed_ms,
                               agent_light_frame_t *frame) {
     if (frame == NULL) return false;
@@ -80,4 +103,3 @@ bool agent_light_model_render(agent_light_state_t state, uint32_t elapsed_ms,
     }
     return false;
 }
-

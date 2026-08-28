@@ -8,4 +8,5 @@ work/
 outputs/
 firmware/**/build/
 NuphyBar-Halo75-V2-ANSI-USB.bin
+NuphyBar-Halo75-V2-ANSI.bin
 *.xcodeproj/

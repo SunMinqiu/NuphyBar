@@ -30,7 +30,7 @@ It never reads keystrokes and does not stream animation frames. The Mac sends on
 
 The stock cyan Caps Lock indicator remains on the left side. Agent state only uses the right side light.
 
-The Halo75 V2 ANSI USB port adds distinct local effects for thinking, tool execution, output, permission requests, completion, and errors. See [`firmware/halo75-v2-ansi`](firmware/halo75-v2-ansi) for its exact color plan and current verification status.
+The Halo75 V2 ANSI port uses seven distinct states over USB and a safe three-state subset over Bluetooth. See [`firmware/halo75-v2-ansi`](firmware/halo75-v2-ansi) for its exact color plan and current verification status.
 
 ## Keyboard compatibility
 
@@ -39,6 +39,7 @@ The Halo75 V2 ANSI USB port adds distinct local effects for thinking, tool execu
 | Model | Transport | Status | Light area |
 |---|---|---|---|
 | **Air60 V2 ANSI** | Bluetooth Low Energy | Supported | Five right-side RGB LEDs |
+| **Halo75 V2 ANSI QMK** | Wired USB Raw HID | Supported on the tested keyboard | Five upper-left RGB LEDs, indices 83–87 |
 
 Bluetooth typing, the left Caps Lock indicator, every Agent state, reconnection, and sustained typing stability have been tested on real hardware.
 
@@ -46,9 +47,9 @@ Bluetooth typing, the left Caps Lock indicator, every Agent state, reconnection,
 
 | Model | Transport | Status | Light area |
 |---|---|---|---|
-| **Halo75 V2 ANSI QMK** | Wired USB Raw HID | Source and firmware build verified | Five upper-left RGB LEDs, indices 83–87 |
+| **Halo75 V2 ANSI QMK** | Bluetooth Low Energy | Source and reproducible firmware build verified | Five upper-left RGB LEDs, indices 83–87 |
 
-This port is not release-supported until typing, VIA layout retention, Caps Lock, every state, reconnect, sleep, and recovery have been verified on the exact keyboard.
+The Bluetooth path is not release-supported until typing, Caps Lock, every compact state, reconnect, sleep, channel switching, and recovery have been verified on the exact keyboard.
 
 ### Port-ready, but each model needs its own firmware
 
@@ -136,11 +137,13 @@ The complete report is only two bytes: `[Report ID 1, state mask]`. Caps Lock is
 
 Only the Num and Scroll bits are available, so the safe protocol supports three non-idle states. Error and waiting intentionally share the amber attention effect. A distinct fourth state would require a new wireless protocol rather than another value in this two-bit channel.
 
-### Halo75 V2 ANSI USB protocol
+### Halo75 V2 ANSI protocols
 
 The wired Halo port uses the existing QMK/VIA Raw HID interface at usage page `0xFF60`, usage `0x61`. Reports are 32 bytes, start with the `NB` signature and protocol version, carry one state byte, and end with an XOR checksum. The custom firmware changes the USB product string to `NuPhy Halo75 V2 NuphyBar`, so the app does not mistake stock firmware for a compatible device.
 
 Raw HID carries seven values: idle, thinking, tool running, outputting, permission required, complete, and error. The app still sends only when the displayed state changes. Hardware battery, Caps Lock, sleep, and radio indications run after the Agent overlay and therefore keep priority.
+
+Bluetooth reuses the same standard two-byte LED Output Report as the Air60 V2. The Halo wireless module copies the host LED mask into `dev_info.rf_led` while BLE1, BLE2, or BLE3 is connected. The firmware ignores the Caps Lock bit and maps working to slow red breathing, waiting/error to fast blue breathing, complete to solid green, and idle to the stock effect. The 2.4 GHz transport is not enabled by this port.
 
 ### Why this does not interfere with typing
 
@@ -179,7 +182,7 @@ Requirements:
 - macOS 14 or later;
 - an Apple Silicon Mac;
 - a NuPhy keyboard with compatible custom firmware;
-- Bluetooth Low Energy for the Air60 V2 port, or wired USB for the Halo75 V2 ANSI port.
+- Bluetooth Low Energy for the Air60 V2 port, or Bluetooth Low Energy and wired USB for the Halo75 V2 ANSI port.
 
 Steps:
 
@@ -270,14 +273,14 @@ Download NuPhy's official Air60 V2 ANSI v2.1.5 firmware and run:
 
 The build runs effect and Thumb branch tests, validates the official baseline, compiles the hook, adds the DFU suffix, and verifies the final layout. GCC 8.5.0 reproduces the `stable-v7` Release binary byte for byte.
 
-For the Halo75 V2 ANSI USB port, use an official NuPhy QMK checkout and Docker or QMK CLI:
+For the Halo75 V2 ANSI USB and Bluetooth port, use an official NuPhy QMK checkout and Docker or QMK CLI:
 
 ```bash
 ./firmware/halo75-v2-ansi/test.sh
 ./firmware/halo75-v2-ansi/build.sh /path/to/nuphy-src/qmk_firmware
 ```
 
-The builder accepts only the audited official commit and produces `NuphyBar-Halo75-V2-ANSI-USB.bin`. It does not flash the keyboard.
+The builder accepts only the audited official commit and produces `NuphyBar-Halo75-V2-ANSI.bin`. It does not flash the keyboard.
 
 ## Ask Codex or Claude Code to port/flash firmware
 
@@ -307,7 +310,7 @@ Sources/
   AgentLightHID/      NuPhy BLE and USB HID discovery and output reports
   AgentLightCLI/      short-lived helper bundled inside the app
 firmware/air60-v2/    stable-v7 hook, builder, verifier, and tests
-firmware/halo75-v2-ansi/ Halo75 USB overlay, builder, and tests
+firmware/halo75-v2-ansi/ Halo75 USB/BLE overlay, builder, and tests
 Design/               source artwork for the app and menu-bar logos
 script/               app build, local install, and DMG packaging
 Tests/                Swift tests

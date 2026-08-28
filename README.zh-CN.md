@@ -30,7 +30,7 @@ NuphyBar 是一个轻量的原生 macOS 菜单栏应用。它接收 Codex、Clau
 
 Caps Lock 的左侧青色提示保持原样。Agent 状态只占用右侧灯条。
 
-Halo75 V2 ANSI 有线版还可以分别显示思考、执行工具、输出、等待确认、完成和错误。准确颜色和当前验证状态见 [`firmware/halo75-v2-ansi`](firmware/halo75-v2-ansi)。
+Halo75 V2 ANSI 通过 USB 可以分别显示七种状态，通过蓝牙使用安全的三状态子集。准确颜色和当前验证状态见 [`firmware/halo75-v2-ansi`](firmware/halo75-v2-ansi)。
 
 ## 键盘兼容性
 
@@ -39,6 +39,7 @@ Halo75 V2 ANSI 有线版还可以分别显示思考、执行工具、输出、�
 | 型号 | 连接 | 状态 | 灯光区域 |
 |---|---|---|---|
 | **Air60 V2 ANSI** | Bluetooth Low Energy | 正式支持 | 右侧五颗 RGB 灯 |
+| **Halo75 V2 ANSI QMK** | USB 有线 Raw HID | 已在目标键盘验证 | 左上角五颗 RGB 灯，索引 83–87 |
 
 已验证内容包括蓝牙输入、Caps Lock 左灯、工作/等待/完成/空闲状态、断开重连以及长时间打字稳定性。
 
@@ -46,9 +47,9 @@ Halo75 V2 ANSI 有线版还可以分别显示思考、执行工具、输出、�
 
 | 型号 | 连接 | 状态 | 灯光区域 |
 |---|---|---|---|
-| **Halo75 V2 ANSI QMK** | USB 有线 Raw HID | 源码和固件构建已验证 | 左上角五颗 RGB 灯，索引 83–87 |
+| **Halo75 V2 ANSI QMK** | Bluetooth Low Energy | 源码和可复现固件构建已验证 | 左上角五颗 RGB 灯，索引 83–87 |
 
-完成按键输入、VIA 布局保留、Caps Lock、全部状态、重连、睡眠和官方恢复测试前，这个移植不会标记为正式支持。
+完成蓝牙输入、Caps Lock、三种状态、重连、睡眠、频道切换和官方恢复测试前，蓝牙路径不会标记为正式支持。
 
 ### 可以移植，但必须制作对应型号的专用固件
 
@@ -136,11 +137,13 @@ NuphyBar 没有给蓝牙增加私有 GATT 服务，而是复用键盘本来就�
 
 只有 Num 与 Scroll 两个可用位，所以目前只能可靠表达三个非空闲状态。错误与等待批准共用琥珀色提醒；如果要增加独立错误灯，必须设计新的无线通信协议，不能继续只靠这两个标准位。
 
-### Halo75 V2 ANSI USB 协议
+### Halo75 V2 ANSI 双协议
 
 Halo 有线版复用 QMK/VIA 已有的 Raw HID 接口，Usage Page 为 `0xFF60`，Usage 为 `0x61`。每个报告固定 32 字节，以 `NB` 签名和协议版本开头，包含一个状态字节，并以 XOR 校验结尾。定制固件会把 USB 产品名称改为 `NuPhy Halo75 V2 NuphyBar`，应用不会把原厂固件误判为兼容设备。
 
 Raw HID 可以表达空闲、思考、执行工具、输出、等待确认、完成和错误七种状态。应用仍然只在最终显示状态变化时发送一次。固件的电量、Caps Lock、睡眠和无线提示在 Agent 覆盖层之后执行，因此始终具有更高优先级。
+
+蓝牙复用与 Air60 V2 相同的标准两字节 LED Output Report。Halo 无线模块会在 BLE1、BLE2 或 BLE3 已连接时把主机 LED 掩码写入 `dev_info.rf_led`。固件忽略 Caps Lock 位，并把工作中映射为红色慢呼吸、等待或错误映射为蓝色快呼吸、完成映射为绿色常亮、空闲映射为原厂灯效。本移植暂不启用 2.4G 通道。
 
 ### 为什么不会影响打字
 
@@ -179,7 +182,7 @@ Raw HID 可以表达空闲、思考、执行工具、输出、等待确认、完
 - macOS 14 或更高版本；
 - Apple Silicon Mac；
 - 已刷入兼容固件的 NuPhy 键盘；
-- Air60 V2 使用 Bluetooth Low Energy，Halo75 V2 ANSI 使用 USB 有线连接。
+- Air60 V2 使用 Bluetooth Low Energy，Halo75 V2 ANSI 支持 Bluetooth Low Energy 和 USB 有线连接。
 
 步骤：
 
@@ -270,14 +273,14 @@ brew install arm-none-eabi-gcc@8 arm-none-eabi-binutils dfu-util
 
 构建过程会先运行灯效和 Thumb 跳转编码测试，再校验官方基线、编译 Hook、添加 DFU 后缀并验证最终布局。使用 GCC 8.5.0 时应逐字生成 Release 中的 `stable-v7` 文件。
 
-Halo75 V2 ANSI USB 版需要 NuPhy 官方 QMK 源码和 Docker 或 QMK CLI：
+Halo75 V2 ANSI USB 与蓝牙版需要 NuPhy 官方 QMK 源码和 Docker 或 QMK CLI：
 
 ```bash
 ./firmware/halo75-v2-ansi/test.sh
 ./firmware/halo75-v2-ansi/build.sh /path/to/nuphy-src/qmk_firmware
 ```
 
-构建器只接受经过审查的官方提交，并生成 `NuphyBar-Halo75-V2-ANSI-USB.bin`。脚本不会刷写键盘。
+构建器只接受经过审查的官方提交，并生成 `NuphyBar-Halo75-V2-ANSI.bin`。脚本不会刷写键盘。
 
 ## 让 Codex / Claude Code 帮你适配或刷固件
 
@@ -307,7 +310,7 @@ Sources/
   AgentLightHID/      NuPhy BLE 与 USB HID 设备发现和报告发送
   AgentLightCLI/      App 内置的短生命周期 Hook helper
 firmware/air60-v2/    Air60 V2 stable-v7 Hook、构建器与测试
-firmware/halo75-v2-ansi/ Halo75 USB 覆盖层、构建器与测试
+firmware/halo75-v2-ansi/ Halo75 USB/BLE 覆盖层、构建器与测试
 Design/               NuphyBar App 和菜单栏 Logo 源文件
 script/               App 构建、运行和 DMG 打包脚本
 Tests/                Swift 测试

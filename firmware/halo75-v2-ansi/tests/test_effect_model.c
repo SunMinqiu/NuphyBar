@@ -47,6 +47,30 @@ static void test_idle_restores_stock_lighting(void) {
     assert(!agent_light_model_render(AGENT_LIGHT_IDLE, 0, &frame));
 }
 
+static void test_wireless_led_decoder_uses_only_num_and_scroll_lock(void) {
+    assert(agent_light_decode_wireless_led(0x00) == AGENT_LIGHT_IDLE);
+    assert(agent_light_decode_wireless_led(0x01) == AGENT_LIGHT_THINKING);
+    assert(agent_light_decode_wireless_led(0x04) == AGENT_LIGHT_PERMISSION);
+    assert(agent_light_decode_wireless_led(0x05) == AGENT_LIGHT_COMPLETE);
+
+    assert(agent_light_decode_wireless_led(0x02) == AGENT_LIGHT_IDLE);
+    assert(agent_light_decode_wireless_led(0x03) == AGENT_LIGHT_THINKING);
+    assert(agent_light_decode_wireless_led(0x06) == AGENT_LIGHT_PERMISSION);
+    assert(agent_light_decode_wireless_led(0x07) == AGENT_LIGHT_COMPLETE);
+}
+
+static void test_transport_selection_keeps_usb_rich_and_gates_wireless(void) {
+    assert(agent_light_select_transport_state(
+               true, false, 0x00, AGENT_LIGHT_OUTPUTTING) ==
+           AGENT_LIGHT_OUTPUTTING);
+    assert(agent_light_select_transport_state(
+               false, true, 0x05, AGENT_LIGHT_ERROR) ==
+           AGENT_LIGHT_COMPLETE);
+    assert(agent_light_select_transport_state(
+               false, false, 0x05, AGENT_LIGHT_ERROR) ==
+           AGENT_LIGHT_IDLE);
+}
+
 static void test_solid_states_use_the_agreed_colors(void) {
     agent_light_frame_t frame = {0};
     assert(agent_light_model_render(AGENT_LIGHT_TOOL_RUNNING, 0, &frame));
@@ -83,6 +107,8 @@ static void test_error_flashes_red(void) {
 int main(void) {
     test_protocol_accepts_all_states_and_rejects_damage();
     test_idle_restores_stock_lighting();
+    test_wireless_led_decoder_uses_only_num_and_scroll_lock();
+    test_transport_selection_keeps_usb_rich_and_gates_wireless();
     test_solid_states_use_the_agreed_colors();
     test_breathing_states_keep_their_hue();
     test_error_flashes_red();

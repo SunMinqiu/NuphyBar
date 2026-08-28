@@ -29,6 +29,9 @@ typedef struct {
 
 bool agent_light_decode_report(const uint8_t *report, size_t length,
                                agent_light_state_t *state);
+agent_light_state_t agent_light_decode_wireless_led(uint8_t led_mask);
+agent_light_state_t agent_light_select_transport_state(
+    bool is_usb, bool is_connected_bluetooth, uint8_t wireless_led_mask,
+    agent_light_state_t usb_state);
 bool agent_light_model_render(agent_light_state_t state, uint32_t elapsed_ms,
                               agent_light_frame_t *frame);
-

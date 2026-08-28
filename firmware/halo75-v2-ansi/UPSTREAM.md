@@ -1,6 +1,6 @@
 # Upstream firmware notice
 
-The Halo75 V2 ANSI USB port is derived from NuPhy's QMK source and remains licensed under GPL-2.0-or-later.
+The Halo75 V2 ANSI USB and Bluetooth port is derived from NuPhy's QMK source and remains licensed under GPL-2.0-or-later.
 
 Upstream references:
 
@@ -14,5 +14,4 @@ Upstream references:
 
 The builder creates a detached worktree at the exact source commit, applies the small source overlay in this directory, and compiles the existing `via` keymap. It does not include NuPhy's source tree or recovery binary in this repository.
 
-The pinned build container is `qmkfm/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a`, which contains arm-none-eabi-gcc 15.2.0. Version strings are skipped so clean builds are reproducible. The resulting 67,718-byte firmware has SHA-256 `f31e5917e473f3385e2ce3ee41edf72d6d82fba9a0c7f61ccc3a487d1d3bd260`.
-
+The pinned build container is `qmkfm/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a`, which contains arm-none-eabi-gcc 15.2.0. Version strings are skipped so clean builds are reproducible. The resulting 67,922-byte QMK payload becomes a 67,940-byte DFU image with SHA-256 `a3d3ae63b2d69029222db2cf6427a727261e6a6538218f621d6ede0dfb7e658c`.

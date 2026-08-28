@@ -44,7 +44,7 @@ struct KeyboardSettingsView: View {
             }
 
             SettingsGroup(title: language.text(.lightStatus)) {
-                LightStatusList(richStates: usesHalo75V2USBProtocol)
+                LightStatusList(profile: lightingProfile)
             }
 
             if let keyboardError = model.keyboardError {
@@ -65,7 +65,7 @@ struct KeyboardSettingsView: View {
 
     private var statusText: String {
         if model.isConnected {
-            return language.text(usesHalo75V2USBProtocol ? .wiredConnected : .bluetoothConnected)
+            return language.text(lightingProfile == .halo75USB ? .wiredConnected : .bluetoothConnected)
         }
         switch model.hidAccessState {
         case .unknown: return language.text(.checkingKeyboard)
@@ -74,27 +74,55 @@ struct KeyboardSettingsView: View {
         }
     }
 
-    private var usesHalo75V2USBProtocol: Bool {
-        model.keyboardModel?.caseInsensitiveCompare("NuPhy Halo75 V2 NuphyBar") == .orderedSame
+    private var lightingProfile: KeyboardLightingProfile {
+        KeyboardLightingProfile(productName: model.keyboardModel)
+    }
+}
+
+enum KeyboardLightingProfile: Equatable {
+    case air60Bluetooth
+    case halo75Bluetooth
+    case halo75USB
+
+    init(productName: String?) {
+        guard let productName else {
+            self = .air60Bluetooth
+            return
+        }
+        if productName.caseInsensitiveCompare("NuPhy Halo75 V2 NuphyBar") == .orderedSame {
+            self = .halo75USB
+        } else if productName.range(
+            of: #"^NuPhy Halo75 V2(?:-[1-3])?$"#,
+            options: [.regularExpression, .caseInsensitive]
+        ) != nil {
+            self = .halo75Bluetooth
+        } else {
+            self = .air60Bluetooth
+        }
     }
 }
 
 private struct LightStatusList: View {
     @Environment(\.appLanguage) private var language
-    let richStates: Bool
+    let profile: KeyboardLightingProfile
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
             VStack(spacing: 0) {
-                if richStates {
+                switch profile {
+                case .halo75USB:
                     row(.thinking, title: language.text(.thinking), detail: language.text(.redBreath), time: time)
                     row(.toolRunning, title: language.text(.toolRunning), detail: language.text(.solidRed), time: time)
                     row(.outputting, title: language.text(.outputting), detail: language.text(.yellowBreath), time: time)
                     row(.waiting, title: language.text(.permissionRequired), detail: language.text(.blueFastBreath), time: time)
                     row(.complete, title: language.text(.taskComplete), detail: language.text(.solidGreen), time: time)
                     row(.error, title: language.text(.error), detail: language.text(.redFlash), time: time)
-                } else {
+                case .halo75Bluetooth:
+                    row(.thinking, title: language.text(.working), detail: language.text(.redBreath), time: time)
+                    row(.waiting, title: language.text(.waiting), detail: language.text(.blueFastBreath), time: time)
+                    row(.complete, title: language.text(.taskComplete), detail: language.text(.solidGreen), time: time)
+                case .air60Bluetooth:
                     row(.working, title: language.text(.working), detail: language.text(.blueFlow), time: time)
                     row(.waiting, title: language.text(.waiting), detail: language.text(.amberFlash), time: time)
                     row(.complete, title: language.text(.taskComplete), detail: language.text(.greenBreath), time: time)

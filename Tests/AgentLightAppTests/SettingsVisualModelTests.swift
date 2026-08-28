@@ -63,6 +63,14 @@ func halo75RichStatePreviewColors() throws {
     #expect(complete.brightness == 1)
 }
 
+@Test("keyboard settings distinguish Halo75 USB and Bluetooth effects")
+func keyboardSettingsDistinguishHalo75Transports() {
+    #expect(KeyboardLightingProfile(productName: "NuPhy Halo75 V2 NuphyBar") == .halo75USB)
+    #expect(KeyboardLightingProfile(productName: "NuPhy Halo75 V2-1") == .halo75Bluetooth)
+    #expect(KeyboardLightingProfile(productName: "NuPhy Halo75 V2-3") == .halo75Bluetooth)
+    #expect(KeyboardLightingProfile(productName: "NuPhy Air60 V2-1") == .air60Bluetooth)
+}
+
 @Test("settings navigation matches the compact three-tab reference")
 func settingsNavigationUsesThreeCompactTabs() {
     #expect(SettingsSection.allCases.map { $0.title(in: .simplifiedChinese) } == ["Agent", "键盘", "关于"])

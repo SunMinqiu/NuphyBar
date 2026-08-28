@@ -8,7 +8,7 @@ BASELINE_COMMIT="4223dece7852b9fd9abd7c61559272241ef4a223"
 BUILD_ROOT="$(mktemp -d /tmp/NuphyBar-halo75-build.XXXXXX)"
 BUILD_ROOT="$(cd "$BUILD_ROOT" && pwd -P)"
 QMK_ROOT="$BUILD_ROOT/qmk_firmware"
-OUTPUT_NAME="NuphyBar-Halo75-V2-ANSI-USB.bin"
+OUTPUT_NAME="NuphyBar-Halo75-V2-ANSI.bin"
 QMK_DOCKER_IMAGE="qmkfm/qmk_cli@sha256:b7d7fa8fb4432b569931de5ad59098cb788f440ed61a62c5126746b71aee0f4a"
 
 cleanup() {

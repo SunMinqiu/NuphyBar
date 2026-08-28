@@ -53,7 +53,8 @@ public enum NuPhyHIDConnectionState: Equatable, Sendable {
 
 enum NuPhyHIDDeviceProfile: Int, Equatable, Sendable {
     case halo75V2USB = 0
-    case bluetoothKeyboardLED = 1
+    case halo75V2Bluetooth = 1
+    case air60V2Bluetooth = 2
 }
 
 public final class NuPhyHIDTransport: @unchecked Sendable {
@@ -163,10 +164,30 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
             return .halo75V2USB
         }
 
-        if transport == "Bluetooth Low Energy", maxOutputReportSize >= 2 {
-            return .bluetoothKeyboardLED
+        if transport == "Bluetooth Low Energy",
+           maxOutputReportSize >= 2,
+           vendorID == 0x19F5 {
+            if productID == 0x3246,
+               isBluetoothProduct(productName, model: "Halo75 V2") {
+                return .halo75V2Bluetooth
+            }
+            if isBluetoothProduct(productName, model: "Air60 V2") {
+                return .air60V2Bluetooth
+            }
         }
         return nil
+    }
+
+    private static func isBluetoothProduct(_ productName: String, model: String) -> Bool {
+        let baseName = "NuPhy \(model)"
+        if productName.caseInsensitiveCompare(baseName) == .orderedSame {
+            return true
+        }
+        for channel in 1...3 where
+            productName.caseInsensitiveCompare("\(baseName)-\(channel)") == .orderedSame {
+            return true
+        }
+        return false
     }
 
     public func refresh() {
@@ -222,7 +243,7 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
                             Halo75V2RawHIDProtocol.encode(command),
                             on: currentDevice
                         )
-                    case .bluetoothKeyboardLED:
+                    case .halo75V2Bluetooth, .air60V2Bluetooth:
                         let capsLockOn = CGEventSource.flagsState(.combinedSessionState)
                             .contains(.maskAlphaShift)
                         let mask = DirectStatusEncoder.encode(command, capsLockOn: capsLockOn)
