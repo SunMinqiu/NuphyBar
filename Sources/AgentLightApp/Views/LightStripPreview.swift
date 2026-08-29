@@ -9,7 +9,6 @@ enum LightStripEffect {
     case complete
     case error
     case idle
-    case solidPurple
     case solidYellow
     case solidBlue
 }
@@ -117,8 +116,6 @@ enum LightStripModel {
             )
         case .idle:
             return interpolate(idleColorAnchors(time: time), at: position)
-        case .solidPurple:
-            return LightStripSample(hue: 0.73, saturation: 0.63, brightness: 1, opacity: 1)
         case .solidYellow:
             return LightStripSample(hue: 0.115, saturation: 1, brightness: 1, opacity: 1)
         case .solidBlue:

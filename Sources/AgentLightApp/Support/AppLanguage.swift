@@ -45,7 +45,6 @@ enum AppText {
     case redFlash
     case idle
     case factoryEffect
-    case fullKeyboardPurple
     case fullKeyboardRed
     case fullKeyboardYellow
     case fullKeyboardBlue
@@ -175,8 +174,6 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         case (.english, .idle): "Idle"
         case (.simplifiedChinese, .factoryEffect): "恢复原厂灯效"
         case (.english, .factoryEffect): "Factory Effect"
-        case (.simplifiedChinese, .fullKeyboardPurple): "整键紫色常亮"
-        case (.english, .fullKeyboardPurple): "Full-key Purple"
         case (.simplifiedChinese, .fullKeyboardRed): "整键红色常亮"
         case (.english, .fullKeyboardRed): "Full-key Red"
         case (.simplifiedChinese, .fullKeyboardYellow): "整键黄色常亮"

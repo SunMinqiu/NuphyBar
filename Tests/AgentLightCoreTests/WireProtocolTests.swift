@@ -37,7 +37,7 @@ func halo75V2RawHIDReport() {
 func aulaF99ProRealtimeReport() {
     let expectedColors: [(AgentLightCommand, [UInt8])] = [
         (.idle, [0x00, 0xFF, 0x00]),
-        (.working, [0x9B, 0x5D, 0xFF]),
+        (.working, [0xFF, 0x00, 0x00]),
         (.toolRunning, [0xFF, 0x00, 0x00]),
         (.outputting, [0xFF, 0xB0, 0x00]),
         (.waiting, [0x00, 0x66, 0xFF]),

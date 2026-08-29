@@ -26,6 +26,7 @@ final class AppModel {
     @ObservationIgnored private var agentStateObservation: AgentStateChangeObservation?
     @ObservationIgnored private var agentExpirationTask: Task<Void, Never>?
     @ObservationIgnored private var agentFallbackTask: Task<Void, Never>?
+    @ObservationIgnored private var aulaRealtimeRGBKeepaliveTask: Task<Void, Never>?
     @ObservationIgnored private var keyboardConnectionTask: Task<Void, Never>?
     @ObservationIgnored private var integrationNoticeTask: Task<Void, Never>?
     @ObservationIgnored private var systemWakeMonitor: SystemWakeMonitor?
@@ -50,6 +51,7 @@ final class AppModel {
             isDeliveryReady = false
             keyboardModel = nil
             keyboardError = nil
+            updateAULARealtimeRGBKeepalive()
         }
 
         Task {
@@ -208,6 +210,7 @@ final class AppModel {
             keyboardModel = nil
             keyboardError = error == .permissionDenied ? nil : error.localizedDescription
         }
+        updateAULARealtimeRGBKeepalive()
     }
 
     private func applyAgentStateIfChanged() {
@@ -246,6 +249,44 @@ final class AppModel {
             guard let self else { return }
             agentExpirationTask = nil
             applyAgentStateIfChanged()
+        }
+    }
+
+    private func updateAULARealtimeRGBKeepalive() {
+        aulaRealtimeRGBKeepaliveTask?.cancel()
+        aulaRealtimeRGBKeepaliveTask = nil
+
+        guard hidAccessState == .granted,
+              isConnected,
+              isDeliveryReady,
+              keyboardModel?.trimmingCharacters(in: .whitespacesAndNewlines)
+                .caseInsensitiveCompare("AULA-F99Pro 5.0") == .orderedSame else { return }
+
+        aulaRealtimeRGBKeepaliveTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    return
+                }
+                self?.refreshAULARealtimeRGB()
+            }
+        }
+    }
+
+    private func refreshAULARealtimeRGB() {
+        guard hidAccessState == .granted,
+              isConnected,
+              isDeliveryReady,
+              keyboardModel?.trimmingCharacters(in: .whitespacesAndNewlines)
+                .caseInsensitiveCompare("AULA-F99Pro 5.0") == .orderedSame,
+              var state = try? AgentStateFile().load() else { return }
+        let now = Int64(Date().timeIntervalSince1970)
+        let command = state.presentation(now: now).command
+
+        perform {
+            try await self.keyboard.send(command)
+            self.deliveryState.markDelivered(command)
         }
     }
 

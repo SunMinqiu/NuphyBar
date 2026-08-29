@@ -12,7 +12,7 @@
   <a href="https://x.com/Samoye">Maige on X</a>
 </p>
 
-NuphyBar is a lightweight native macOS menu-bar app. It receives lifecycle events from Codex, Claude Code, Antigravity, OpenCode, and other local agents, then sends one compact HID report when the displayed state changes. NuPhy firmware renders animations locally; the AULA F99 Pro uses its stock real-time RGB mode for solid full-key colors.
+NuphyBar is a lightweight native macOS menu-bar app. It receives lifecycle events from Codex, Claude Code, Antigravity, OpenCode, and other local agents, then sends compact HID reports using the selected keyboard protocol. NuPhy firmware renders animations locally; the AULA F99 Pro uses its stock real-time RGB mode for solid full-key colors.
 
 It never reads or stores keystrokes and does not stream animation frames.
 
@@ -32,7 +32,7 @@ The stock cyan Caps Lock indicator remains on the left side. Agent state only us
 
 The Halo75 V2 ANSI port uses seven distinct states over USB and a safe three-state subset over Bluetooth. See [`firmware/halo75-v2-ansi`](firmware/halo75-v2-ansi) for its exact color plan and current verification status.
 
-The **AULA F99 Pro** Bluetooth path uses the stock non-persistent `0x88` real-time RGB command. It changes the full key backlight without writing keyboard configuration flash. Idle and complete are both solid green; thinking is purple; tool use and errors are red; output is yellow; waiting is blue. The independent right light bar is not used because its HID configuration path persists changes to flash.
+The **AULA F99 Pro** Bluetooth path uses the stock non-persistent `0x88` real-time RGB command. It changes the full key backlight without writing keyboard configuration flash. The stock real-time mode expires unless refreshed, so NuphyBar resends the current color once per second while this keyboard is connected. Idle and complete are both solid green; working, tool use, and errors are red; output is yellow; waiting is blue. The independent right light bar is not used because its HID configuration path persists changes to flash.
 
 ## Keyboard compatibility
 
@@ -95,10 +95,10 @@ flowchart TB
 | Component | Responsibility | What it does not do |
 |---|---|---|
 | Agent hook | Atomically update local state and post a system notification | Control the keyboard directly |
-| NuphyBar | Combine concurrent sessions and send one report when the displayed state changes | Poll every second or stream animation frames |
+| NuphyBar | Combine concurrent sessions and send the displayed state using the selected keyboard protocol | Stream animation frames |
 | Keyboard | Render a local NuPhy animation or an AULA solid color | Read Agent content |
 
-In other words, each displayed state produces one HID report, not a continuous sequence such as “light LED 1, then LED 2.”
+NuPhy keyboards receive one report per displayed state. The AULA F99 Pro receives a one-second keepalive for its current solid color because its stock real-time mode expires. NuphyBar never streams animation frames such as “light LED 1, then LED 2.”
 
 The local state file is the durable source of truth; the macOS notification is only the wake-up signal. NuphyBar reads the file at launch and whenever a lifecycle event arrives, then creates one timer for the next state expiration. Normal operation has no Agent-state polling. If system notification registration fails, a five-second fallback poll keeps the app functional.
 

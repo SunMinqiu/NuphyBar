@@ -88,7 +88,7 @@ public enum AULAF99ProRealtimeProtocol {
     private static func color(for command: AgentLightCommand) -> (red: UInt8, green: UInt8, blue: UInt8) {
         switch command {
         case .idle, .complete: return (0x00, 0xFF, 0x00)
-        case .working: return (0x9B, 0x5D, 0xFF)
+        case .working: return (0xFF, 0x00, 0x00)
         case .toolRunning: return (0xFF, 0x00, 0x00)
         case .outputting: return (0xFF, 0xB0, 0x00)
         case .waiting: return (0x00, 0x66, 0xFF)

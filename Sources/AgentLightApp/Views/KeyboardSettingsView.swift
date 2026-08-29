@@ -132,7 +132,7 @@ private struct LightStatusList: View {
                     row(.waiting, title: language.text(.waiting), detail: language.text(.amberFlash), time: time)
                     row(.complete, title: language.text(.taskComplete), detail: language.text(.greenBreath), time: time)
                 case .aulaF99ProBluetooth:
-                    row(.solidPurple, title: language.text(.thinking), detail: language.text(.fullKeyboardPurple), time: time)
+                    row(.toolRunning, title: language.text(.working), detail: language.text(.fullKeyboardRed), time: time)
                     row(.toolRunning, title: language.text(.toolRunning), detail: language.text(.fullKeyboardRed), time: time)
                     row(.solidYellow, title: language.text(.outputting), detail: language.text(.fullKeyboardYellow), time: time)
                     row(.solidBlue, title: language.text(.permissionRequired), detail: language.text(.fullKeyboardBlue), time: time)
