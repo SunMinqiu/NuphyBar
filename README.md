@@ -4,7 +4,7 @@
 
 <h1 align="center">NuphyBar</h1>
 
-<p align="center">Show local AI agent status on a NuPhy keyboard's side lights.</p>
+<p align="center">Show local AI agent status on compatible keyboard lighting.</p>
 
 <p align="center">
   <a href="README.zh-CN.md">简体中文</a> ·
@@ -12,9 +12,9 @@
   <a href="https://x.com/Samoye">Maige on X</a>
 </p>
 
-NuphyBar is a lightweight native macOS menu-bar app. It receives lifecycle events from Codex, Claude Code, Antigravity, OpenCode, and other local agents, sends one compact HID state report when the state changes, and lets custom keyboard firmware render the animation locally.
+NuphyBar is a lightweight native macOS menu-bar app. It receives lifecycle events from Codex, Claude Code, Antigravity, OpenCode, and other local agents, then sends one compact HID report when the displayed state changes. NuPhy firmware renders animations locally; the AULA F99 Pro uses its stock real-time RGB mode for solid full-key colors.
 
-It never reads keystrokes and does not stream animation frames. The Mac sends one report per state change; the keyboard renders every animation frame itself.
+It never reads or stores keystrokes and does not stream animation frames.
 
 > [!IMPORTANT]
 > The firmware in the current Release is **only for the NuPhy Air60 V2 ANSI**. Never flash the Air60 V2 binary to an Air75 V2, Air96 V2, Halo, Gem80, or any other model. A firmware image for the wrong model can make the keyboard unusable.
@@ -32,6 +32,8 @@ The stock cyan Caps Lock indicator remains on the left side. Agent state only us
 
 The Halo75 V2 ANSI port uses seven distinct states over USB and a safe three-state subset over Bluetooth. See [`firmware/halo75-v2-ansi`](firmware/halo75-v2-ansi) for its exact color plan and current verification status.
 
+The **AULA F99 Pro** Bluetooth path uses the stock non-persistent `0x88` real-time RGB command. It changes the full key backlight without writing keyboard configuration flash. Idle and complete are both solid green; thinking is purple; tool use and errors are red; output is yellow; waiting is blue. The independent right light bar is not used because its HID configuration path persists changes to flash.
+
 ## Keyboard compatibility
 
 ### Implemented and physically verified
@@ -41,10 +43,13 @@ The Halo75 V2 ANSI port uses seven distinct states over USB and a safe three-sta
 | **Air60 V2 ANSI** | Bluetooth Low Energy | Supported | Five right-side RGB LEDs |
 | **Halo75 V2 ANSI QMK** | Wired USB Raw HID | Supported on the tested keyboard | Five upper-left RGB LEDs, indices 83–87 |
 | **Halo75 V2 ANSI QMK** | Bluetooth Low Energy | Core path verified; release validation pending | Five upper-left RGB LEDs, indices 83–87 |
+| **AULA F99 Pro** | Bluetooth Low Energy as `AULA-F99Pro 5.0` | Supported on the tested keyboard | Full key RGB backlight |
 
 Air60 V2 Bluetooth typing, the left Caps Lock indicator, every Agent state, reconnection, and sustained typing stability have been tested on real hardware.
 
 Halo75 V2 Bluetooth typing, Caps Lock, all three compact states, idle restoration, and keyboard power-cycle reconnection were verified on the target keyboard on 2026-08-28. The app reopened the BLE HID session and resent the current state with zero output-report errors. Sleep/wake, BLE2/BLE3 channel switching, sustained typing, and official recovery remain before release support.
+
+AULA F99 Pro BLE discovery, configuration reads, stock color indices, all seven NuphyBar states, and the non-persistent full-key real-time RGB command were verified on the target keyboard on 2026-08-28. Its right light bar was confirmed to ignore standard host LED reports and real-time RGB zone modes. The protocol behavior matches the public [AULA F99 direct-mode capture](https://gitlab.com/CalcProgrammer1/OpenRGB/-/work_items/5166).
 
 ### Port-ready, but each model needs its own firmware
 
@@ -84,16 +89,16 @@ flowchart TB
     D["④ Persistent HID session sends one state report"]
     E["⑤ Keyboard firmware renders every frame"]
     A --> B --> C --> D
-    D -->|Bluetooth LED report or USB Raw HID| E
+    D -->|Bluetooth LED/RGB report or USB Raw HID| E
 ```
 
 | Component | Responsibility | What it does not do |
 |---|---|---|
 | Agent hook | Atomically update local state and post a system notification | Control the keyboard directly |
 | NuphyBar | Combine concurrent sessions and send one report when the displayed state changes | Poll every second or stream animation frames |
-| Keyboard firmware | Turn a state into a wave, double pulse, or breathing animation | Read Agent content |
+| Keyboard | Render a local NuPhy animation or an AULA solid color | Read Agent content |
 
-In other words, HID carries “working,” not a continuous sequence such as “light LED 1, then LED 2.”
+In other words, each displayed state produces one HID report, not a continuous sequence such as “light LED 1, then LED 2.”
 
 The local state file is the durable source of truth; the macOS notification is only the wake-up signal. NuphyBar reads the file at launch and whenever a lifecycle event arrives, then creates one timer for the next state expiration. Normal operation has no Agent-state polling. If system notification registration fails, a five-second fallback poll keeps the app functional.
 
@@ -176,8 +181,8 @@ Requirements:
 
 - macOS 14 or later;
 - an Apple Silicon Mac;
-- a NuPhy keyboard with compatible custom firmware;
-- Bluetooth Low Energy for the Air60 V2 port, or Bluetooth Low Energy and wired USB for the Halo75 V2 ANSI port.
+- a supported NuPhy keyboard with compatible custom firmware, or an AULA F99 Pro using its stock firmware;
+- Bluetooth Low Energy for the Air60 V2 and AULA F99 Pro ports, or Bluetooth Low Energy and wired USB for the Halo75 V2 ANSI port.
 
 Steps:
 

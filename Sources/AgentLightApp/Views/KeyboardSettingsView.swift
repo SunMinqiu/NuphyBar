@@ -54,7 +54,8 @@ struct KeyboardSettingsView: View {
     }
 
     private var keyboardName: String {
-        model.keyboardModel ?? language.text(.nuphyKeyboard)
+        model.keyboardModel?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? language.text(.compatibleKeyboard)
     }
 
     private var statusColor: Color {
@@ -83,6 +84,7 @@ enum KeyboardLightingProfile: Equatable {
     case air60Bluetooth
     case halo75Bluetooth
     case halo75USB
+    case aulaF99ProBluetooth
 
     init(productName: String?) {
         guard let productName else {
@@ -91,6 +93,9 @@ enum KeyboardLightingProfile: Equatable {
         }
         if productName.caseInsensitiveCompare("NuPhy Halo75 V2 NuphyBar") == .orderedSame {
             self = .halo75USB
+        } else if productName.trimmingCharacters(in: .whitespacesAndNewlines)
+            .caseInsensitiveCompare("AULA-F99Pro 5.0") == .orderedSame {
+            self = .aulaF99ProBluetooth
         } else if productName.range(
             of: #"^NuPhy Halo75 V2(?:-[1-3])?$"#,
             options: [.regularExpression, .caseInsensitive]
@@ -126,8 +131,19 @@ private struct LightStatusList: View {
                     row(.working, title: language.text(.working), detail: language.text(.blueFlow), time: time)
                     row(.waiting, title: language.text(.waiting), detail: language.text(.amberFlash), time: time)
                     row(.complete, title: language.text(.taskComplete), detail: language.text(.greenBreath), time: time)
+                case .aulaF99ProBluetooth:
+                    row(.solidPurple, title: language.text(.thinking), detail: language.text(.fullKeyboardPurple), time: time)
+                    row(.toolRunning, title: language.text(.toolRunning), detail: language.text(.fullKeyboardRed), time: time)
+                    row(.solidYellow, title: language.text(.outputting), detail: language.text(.fullKeyboardYellow), time: time)
+                    row(.solidBlue, title: language.text(.permissionRequired), detail: language.text(.fullKeyboardBlue), time: time)
+                    row(.complete, title: language.text(.taskComplete), detail: language.text(.fullKeyboardGreen), time: time)
+                    row(.toolRunning, title: language.text(.error), detail: language.text(.fullKeyboardRed), time: time)
                 }
-                row(.idle, title: language.text(.idle), detail: language.text(.factoryEffect), time: time)
+                if profile == .aulaF99ProBluetooth {
+                    row(.complete, title: language.text(.idle), detail: language.text(.fullKeyboardGreen), time: time)
+                } else {
+                    row(.idle, title: language.text(.idle), detail: language.text(.factoryEffect), time: time)
+                }
             }
         }
     }

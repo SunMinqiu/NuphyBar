@@ -5,7 +5,7 @@ import Testing
 @Test("HID failures expose useful macOS error descriptions")
 func localizedHIDError() {
     #expect(NuPhyHIDError.deviceNotConnected.localizedDescription
-            == "未找到已连接的 NuphyBar 兼容 NuPhy 键盘")
+            == "未找到已连接的 NuphyBar 兼容键盘")
     #expect(NuPhyHIDError.permissionDenied.localizedDescription
             == "需要允许 NuphyBar 访问键盘 HID 接口")
 }
@@ -26,8 +26,8 @@ func scopedDeviceMatching() {
     #expect(rawHID.count == 2)
 }
 
-@Test("compatible NuPhy models are selected by family and HID capability")
-func compatibleNuPhyKeyboards() {
+@Test("compatible keyboard models are selected by exact identity and HID capability")
+func compatibleKeyboards() {
     #expect(NuPhyHIDTransport.isCompatible(
         productName: "NuPhy Air60 V2-1",
         transport: "Bluetooth Low Energy",
@@ -110,6 +110,42 @@ func compatibleNuPhyKeyboards() {
         transport: "Bluetooth Low Energy",
         maxOutputReportSize: 1,
         vendorID: 0x19F5
+    ))
+    #expect(NuPhyHIDTransport.isCompatible(
+        productName: "AULA-F99Pro 5.0 ",
+        transport: "Bluetooth Low Energy",
+        maxOutputReportSize: 20,
+        usagePage: 0x01,
+        usage: 0x06,
+        vendorID: 0x3554,
+        productID: 0xFA07
+    ))
+    #expect(!NuPhyHIDTransport.isCompatible(
+        productName: "AULA-F99Pro 5.0 ",
+        transport: "Bluetooth Low Energy",
+        maxOutputReportSize: 19,
+        usagePage: 0x01,
+        usage: 0x06,
+        vendorID: 0x3554,
+        productID: 0xFA07
+    ))
+    #expect(!NuPhyHIDTransport.isCompatible(
+        productName: "AULA-F99Pro 5.0 ",
+        transport: "Bluetooth Low Energy",
+        maxOutputReportSize: 20,
+        usagePage: 0x01,
+        usage: 0x06,
+        vendorID: 0x3554,
+        productID: 0xFA09
+    ))
+    #expect(!NuPhyHIDTransport.isCompatible(
+        productName: "AULA-F99Pro 3.0",
+        transport: "Bluetooth Low Energy",
+        maxOutputReportSize: 20,
+        usagePage: 0x01,
+        usage: 0x06,
+        vendorID: 0x3554,
+        productID: 0xFA07
     ))
 }
 

@@ -22,7 +22,7 @@ enum AppText {
     case wiredConnected
     case checkAgain
     case allowAccess
-    case nuphyKeyboard
+    case compatibleKeyboard
     case checkingKeyboard
     case accessRequired
     case keyboardNotFound
@@ -45,6 +45,11 @@ enum AppText {
     case redFlash
     case idle
     case factoryEffect
+    case fullKeyboardPurple
+    case fullKeyboardRed
+    case fullKeyboardYellow
+    case fullKeyboardBlue
+    case fullKeyboardGreen
     case language
     case launchAtLogin
     case launchAtLoginApproval
@@ -124,14 +129,14 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         case (.english, .checkAgain): "Check Again"
         case (.simplifiedChinese, .allowAccess): "允许访问"
         case (.english, .allowAccess): "Allow Access"
-        case (.simplifiedChinese, .nuphyKeyboard): "NuPhy 键盘"
-        case (.english, .nuphyKeyboard): "NuPhy Keyboard"
+        case (.simplifiedChinese, .compatibleKeyboard): "兼容键盘"
+        case (.english, .compatibleKeyboard): "Compatible Keyboard"
         case (.simplifiedChinese, .checkingKeyboard): "正在检查键盘…"
         case (.english, .checkingKeyboard): "Checking keyboard…"
         case (.simplifiedChinese, .accessRequired): "需要键盘访问权限"
         case (.english, .accessRequired): "Keyboard access required"
-        case (.simplifiedChinese, .keyboardNotFound): "未找到兼容的 NuPhy 键盘"
-        case (.english, .keyboardNotFound): "No compatible NuPhy keyboard found"
+        case (.simplifiedChinese, .keyboardNotFound): "未找到兼容键盘"
+        case (.english, .keyboardNotFound): "No compatible keyboard found"
         case (.simplifiedChinese, .working): "工作中"
         case (.english, .working): "Working"
         case (.simplifiedChinese, .blueFlow): "蓝色流光"
@@ -170,6 +175,16 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         case (.english, .idle): "Idle"
         case (.simplifiedChinese, .factoryEffect): "恢复原厂灯效"
         case (.english, .factoryEffect): "Factory Effect"
+        case (.simplifiedChinese, .fullKeyboardPurple): "整键紫色常亮"
+        case (.english, .fullKeyboardPurple): "Full-key Purple"
+        case (.simplifiedChinese, .fullKeyboardRed): "整键红色常亮"
+        case (.english, .fullKeyboardRed): "Full-key Red"
+        case (.simplifiedChinese, .fullKeyboardYellow): "整键黄色常亮"
+        case (.english, .fullKeyboardYellow): "Full-key Yellow"
+        case (.simplifiedChinese, .fullKeyboardBlue): "整键蓝色常亮"
+        case (.english, .fullKeyboardBlue): "Full-key Blue"
+        case (.simplifiedChinese, .fullKeyboardGreen): "整键绿色常亮"
+        case (.english, .fullKeyboardGreen): "Full-key Green"
         case (.simplifiedChinese, .language): "语言"
         case (.english, .language): "Language"
         case (.simplifiedChinese, .launchAtLogin): "开机时自动启动"
@@ -178,8 +193,8 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         case (.english, .launchAtLoginApproval): "Allow NuphyBar in System Settings > Login Items"
         case (.simplifiedChinese, .launchAtLoginFailed): "无法更改开机自启："
         case (.english, .launchAtLoginFailed): "Could not change launch at login:"
-        case (.simplifiedChinese, .aboutDescription): "让 NuPhy 侧灯显示本机 Agent 状态"
-        case (.english, .aboutDescription): "Show local Agent status on your NuPhy side lights"
+        case (.simplifiedChinese, .aboutDescription): "让兼容键盘显示本机 Agent 状态"
+        case (.english, .aboutDescription): "Show local Agent status on compatible keyboards"
         case (.simplifiedChinese, .followOnX): "作者麦格 · 在 X 上关注我"
         case (.english, .followOnX): "Maige · Follow me on X"
         }

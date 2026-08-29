@@ -63,12 +63,13 @@ func halo75RichStatePreviewColors() throws {
     #expect(complete.brightness == 1)
 }
 
-@Test("keyboard settings distinguish Halo75 USB and Bluetooth effects")
-func keyboardSettingsDistinguishHalo75Transports() {
+@Test("keyboard settings distinguish every supported keyboard profile")
+func keyboardSettingsDistinguishProfiles() {
     #expect(KeyboardLightingProfile(productName: "NuPhy Halo75 V2 NuphyBar") == .halo75USB)
     #expect(KeyboardLightingProfile(productName: "NuPhy Halo75 V2-1") == .halo75Bluetooth)
     #expect(KeyboardLightingProfile(productName: "NuPhy Halo75 V2-3") == .halo75Bluetooth)
     #expect(KeyboardLightingProfile(productName: "NuPhy Air60 V2-1") == .air60Bluetooth)
+    #expect(KeyboardLightingProfile(productName: "AULA-F99Pro 5.0 ") == .aulaF99ProBluetooth)
 }
 
 @Test("settings navigation matches the compact three-tab reference")

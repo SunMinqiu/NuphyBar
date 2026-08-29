@@ -67,7 +67,7 @@ cat >"$INFO_PLIST" <<PLIST
   <key>LSUIElement</key>
   <true/>
   <key>NSInputMonitoringUsageDescription</key>
-  <string>NuphyBar sends status to compatible NuPhy Bluetooth keyboards. It never reads or stores keystrokes.</string>
+  <string>NuphyBar sends status to compatible keyboards. It never reads or stores keystrokes.</string>
   <key>NSHumanReadableCopyright</key>
   <string>Copyright © 2026 Maige</string>
   <key>NSPrincipalClass</key>

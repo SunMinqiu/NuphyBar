@@ -163,7 +163,7 @@ final class AppModel {
 
     private func rebuildHIDSessionAfterWake() {
         isDeliveryReady = false
-        hidLogger.info("Mac woke from sleep; rebuilding the NuPhy HID session")
+        hidLogger.info("Mac woke from sleep; rebuilding the keyboard HID session")
         Task {
             await keyboard.rebuildSession()
         }
@@ -198,7 +198,7 @@ final class AppModel {
             keyboardError = nil
             if shouldReplayState {
                 deliveryState.connectionRestored()
-                hidLogger.info("NuPhy keyboard HID session is ready")
+                hidLogger.info("Keyboard HID session is ready")
                 applyAgentStateIfChanged()
             }
 

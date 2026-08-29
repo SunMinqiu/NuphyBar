@@ -20,7 +20,7 @@ public enum NuPhyHIDError: LocalizedError, CustomStringConvertible, Equatable, S
         switch self {
         case .permissionDenied: return "keyboard HID access has not been granted"
         case .managerOpenFailed(let status): return "could not open the HID manager (\(hex(status)))"
-        case .deviceNotConnected: return "no compatible NuPhy keyboard is connected"
+        case .deviceNotConnected: return "no compatible keyboard is connected"
         case .reportFailed(let status): return "sending a keyboard report failed (\(hex(status)))"
         }
     }
@@ -29,8 +29,8 @@ public enum NuPhyHIDError: LocalizedError, CustomStringConvertible, Equatable, S
         switch self {
         case .permissionDenied: return "需要允许 NuphyBar 访问键盘 HID 接口"
         case .managerOpenFailed: return "无法访问 macOS HID 设备管理器"
-        case .deviceNotConnected: return "未找到已连接的 NuphyBar 兼容 NuPhy 键盘"
-        case .reportFailed: return "无法向 NuPhy 键盘发送灯光状态"
+        case .deviceNotConnected: return "未找到已连接的 NuphyBar 兼容键盘"
+        case .reportFailed: return "无法向键盘发送灯光状态"
         }
     }
 
@@ -55,6 +55,7 @@ enum NuPhyHIDDeviceProfile: Int, Equatable, Sendable {
     case halo75V2USB = 0
     case halo75V2Bluetooth = 1
     case air60V2Bluetooth = 2
+    case aulaF99ProBluetooth = 3
 }
 
 public final class NuPhyHIDTransport: @unchecked Sendable {
@@ -150,12 +151,27 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
         vendorID: Int?,
         productID: Int?
     ) -> NuPhyHIDDeviceProfile? {
-        guard let productName,
-              productName.range(of: "NuPhy", options: [.anchored, .caseInsensitive]) != nil,
-              let maxOutputReportSize else { return nil }
+        guard let productName, let maxOutputReportSize else { return nil }
+
+        let normalizedProductName = productName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if transport == "Bluetooth Low Energy",
+           normalizedProductName.caseInsensitiveCompare("AULA-F99Pro 5.0") == .orderedSame,
+           vendorID == 0x3554,
+           productID == 0xFA07,
+           usagePage == 0x01,
+           usage == 0x06,
+           maxOutputReportSize >= AULAF99ProRealtimeProtocol.reportLength {
+            return .aulaF99ProBluetooth
+        }
+
+        guard normalizedProductName.range(
+            of: "NuPhy",
+            options: [.anchored, .caseInsensitive]
+        ) != nil else { return nil }
 
         if transport == "USB",
-           productName.caseInsensitiveCompare("NuPhy Halo75 V2 NuphyBar") == .orderedSame,
+           normalizedProductName.caseInsensitiveCompare("NuPhy Halo75 V2 NuphyBar") == .orderedSame,
            vendorID == 0x19F5,
            productID == 0x32F5,
            usagePage == 0xFF60,
@@ -168,10 +184,10 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
            maxOutputReportSize >= 2,
            vendorID == 0x19F5 {
             if productID == 0x3246,
-               isBluetoothProduct(productName, model: "Halo75 V2") {
+               isBluetoothProduct(normalizedProductName, model: "Halo75 V2") {
                 return .halo75V2Bluetooth
             }
-            if isBluetoothProduct(productName, model: "Air60 V2") {
+            if isBluetoothProduct(normalizedProductName, model: "Air60 V2") {
                 return .air60V2Bluetooth
             }
         }
@@ -207,12 +223,19 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
             guard let device = currentDevice else {
                 throw NuPhyHIDError.deviceNotConnected
             }
-            let name = productName(of: device) ?? "NuPhy keyboard"
+            let name = productName(of: device)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                ?? "compatible keyboard"
             let transport = transport(of: device) ?? "unknown"
             let maxOutput = maxOutputReportSize(of: device)
-            let reportDescription = currentDeviceProfile == .halo75V2USB
-                ? "Raw HID output, report ID 0"
-                : "Keyboard LED output, report ID 1"
+            let reportDescription: String
+            switch currentDeviceProfile {
+            case .halo75V2USB:
+                reportDescription = "Raw HID output, report ID 0"
+            case .aulaF99ProBluetooth:
+                reportDescription = "AULA real-time RGB output, report ID 0x13"
+            default:
+                reportDescription = "Keyboard LED output, report ID 1"
+            }
             return [
                 "Device: \(name)",
                 "Transport: \(transport)",
@@ -248,6 +271,12 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
                             .contains(.maskAlphaShift)
                         let mask = DirectStatusEncoder.encode(command, capsLockOn: capsLockOn)
                         try setKeyboardLEDOutputReport(mask, on: currentDevice)
+                    case .aulaF99ProBluetooth:
+                        try setOutputReport(
+                            AULAF99ProRealtimeProtocol.encode(command),
+                            reportID: AULAF99ProRealtimeProtocol.reportID,
+                            on: currentDevice
+                        )
                     }
                     reconnectBackoff.reset()
                 } catch let error as NuPhyHIDError {
@@ -388,7 +417,8 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
             reconnectBackoff.reset()
         }
         publish(.connected(
-            productName: productName(of: device) ?? "NuPhy 键盘",
+            productName: productName(of: device)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                ?? "兼容键盘",
             delivery: .ready
         ))
     }
@@ -409,7 +439,7 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
     }
 
     private func recoverFromReportFailure(_ error: NuPhyHIDError, productName: String?) {
-        let productName = productName ?? "NuPhy 键盘"
+        let productName = productName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "兼容键盘"
         recoveryProductName = productName
         currentDevice = nil
         currentDeviceProfile = nil
@@ -510,13 +540,21 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
     }
 
     private func setRawOutputReport(_ report: [UInt8], on device: IOHIDDevice) throws {
+        try setOutputReport(report, reportID: 0, on: device)
+    }
+
+    private func setOutputReport(
+        _ report: [UInt8],
+        reportID: CFIndex,
+        on device: IOHIDDevice
+    ) throws {
         var report = report
         let reportCount = report.count
         let status = report.withUnsafeMutableBytes { bytes in
             IOHIDDeviceSetReport(
                 device,
                 kIOHIDReportTypeOutput,
-                0,
+                reportID,
                 bytes.bindMemory(to: UInt8.self).baseAddress!,
                 reportCount
             )

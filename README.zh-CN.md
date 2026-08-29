@@ -4,7 +4,7 @@
 
 <h1 align="center">NuphyBar</h1>
 
-<p align="center">让 NuPhy 键盘侧灯显示本机 AI Agent 的工作状态。</p>
+<p align="center">让兼容键盘的灯光显示本机 AI Agent 状态。</p>
 
 <p align="center">
   <a href="README.md">English</a> ·
@@ -12,9 +12,9 @@
   <a href="https://x.com/Samoye">作者麦格</a>
 </p>
 
-NuphyBar 是一个轻量的原生 macOS 菜单栏应用。它接收 Codex、Claude Code、Antigravity、OpenCode 等 Agent 的生命周期事件，在状态变化时发送一个简短的 HID 状态报告，再由定制键盘固件在本地渲染侧灯动画。
+NuphyBar 是一个轻量的原生 macOS 菜单栏应用。它接收 Codex、Claude Code、Antigravity、OpenCode 等 Agent 的生命周期事件，并在显示状态变化时发送一个简短的 HID 报告。NuPhy 定制固件在键盘本地渲染动画；AULA F99 Pro 使用原厂实时 RGB 模式显示整键纯色。
 
-它不会读取按键内容，也不会持续向键盘传输动画帧。Mac 只在状态改变时发送一次报告；动画全部在键盘本地运行。
+它不会读取或存储按键内容，也不会持续向键盘传输动画帧。
 
 > [!IMPORTANT]
 > 当前 Release 中的键盘固件 **只适用于 NuPhy Air60 V2 ANSI**。不要把 Air60 V2 固件刷进 Air75 V2、Air96 V2、Halo、Gem80 或任何其他型号。刷错型号可能让键盘无法正常工作。
@@ -32,6 +32,8 @@ Caps Lock 的左侧青色提示保持原样。Agent 状态只占用右侧灯条�
 
 Halo75 V2 ANSI 通过 USB 可以分别显示七种状态，通过蓝牙使用安全的三状态子集。准确颜色和当前验证状态见 [`firmware/halo75-v2-ansi`](firmware/halo75-v2-ansi)。
 
+**AULA F99 Pro** 的蓝牙路径使用原厂非持久化 `0x88` 实时 RGB 命令，改变整键背光且不写入键盘配置闪存。空闲和完成均为绿色常亮，思考为紫色，工具执行和错误为红色，输出为黄色，等待为蓝色。右侧独立灯条不参与状态显示，因为它的 HID 配置路径会持久写入闪存。
+
 ## 键盘兼容性
 
 ### 已完成并经过实机验证
@@ -41,10 +43,13 @@ Halo75 V2 ANSI 通过 USB 可以分别显示七种状态，通过蓝牙使用安
 | **Air60 V2 ANSI** | Bluetooth Low Energy | 正式支持 | 右侧五颗 RGB 灯 |
 | **Halo75 V2 ANSI QMK** | USB 有线 Raw HID | 已在目标键盘验证 | 左上角五颗 RGB 灯，索引 83–87 |
 | **Halo75 V2 ANSI QMK** | Bluetooth Low Energy | 核心路径已验证，正式发布验证尚未完成 | 左上角五颗 RGB 灯，索引 83–87 |
+| **AULA F99 Pro** | Bluetooth Low Energy，名称为 `AULA-F99Pro 5.0` | 已在目标键盘验证 | 整键 RGB 背光 |
 
 Air60 V2 已验证内容包括蓝牙输入、Caps Lock 左灯、工作/等待/完成/空闲状态、断开重连以及长时间打字稳定性。
 
 Halo75 V2 已于 2026-08-28 在目标键盘验证蓝牙输入、Caps Lock、三种紧凑状态、空闲恢复和键盘关机重连。应用成功重建 BLE HID 会话并补发当前状态，输出报告错误为零。睡眠唤醒、BLE2/BLE3 频道切换、长时间打字和官方恢复仍需在正式支持前完成。
+
+AULA F99 Pro 已于 2026-08-28 在目标键盘验证 BLE 识别、配置读取、原厂颜色索引、全部七种 NuphyBar 状态和非持久化整键实时 RGB 命令。实测右侧灯条不响应标准主机 LED 报告和实时 RGB 区域模式。协议行为与公开的 [AULA F99 实时模式抓包](https://gitlab.com/CalcProgrammer1/OpenRGB/-/work_items/5166) 一致。
 
 ### 可以移植，但必须制作对应型号的专用固件
 
@@ -84,16 +89,16 @@ flowchart TB
     D["④ 持久 HID 会话发送一次状态报告"]
     E["⑤ 键盘固件在本地渲染每一帧"]
     A --> B --> C --> D
-    D -->|蓝牙 LED 报告或 USB Raw HID| E
+    D -->|蓝牙 LED/RGB 报告或 USB Raw HID| E
 ```
 
 | 部分 | 负责什么 | 不做什么 |
 |---|---|---|
 | Agent Hook | 原子更新本地状态并发送系统通知 | 不直接控制键盘 |
 | NuphyBar | 聚合多个会话，并在显示状态改变时发送一次报告 | 不每秒轮询，也不连续发送动画帧 |
-| 键盘固件 | 把状态变成波浪、双脉冲或呼吸动画 | 不读取 Agent 内容 |
+| 键盘 | 渲染 NuPhy 本地动画或 AULA 整键纯色 | 不读取 Agent 内容 |
 
-换句话说，HID 上传输的是“工作中”，而不是“第一颗灯亮、第二颗灯亮……”这样的每一帧。
+换句话说，每次显示状态只产生一个 HID 报告，不会连续传输“第一颗灯亮、第二颗灯亮……”这样的每一帧。
 
 本地状态文件是可靠的状态存档，macOS 通知只负责“叫醒”应用。NuphyBar 会在启动和收到生命周期事件时读取状态，并只为下一次状态过期建立一个定时器。正常情况下不再轮询 Agent 状态；只有系统通知注册失败时，才启用五秒一次的兜底检查。
 
@@ -176,8 +181,8 @@ Raw HID 可以表达空闲、思考、执行工具、输出、等待确认、完
 
 - macOS 14 或更高版本；
 - Apple Silicon Mac；
-- 已刷入兼容固件的 NuPhy 键盘；
-- Air60 V2 使用 Bluetooth Low Energy，Halo75 V2 ANSI 支持 Bluetooth Low Energy 和 USB 有线连接。
+- 已刷入兼容固件的受支持 NuPhy 键盘，或使用原厂固件的 AULA F99 Pro；
+- Air60 V2 和 AULA F99 Pro 使用 Bluetooth Low Energy，Halo75 V2 ANSI 支持 Bluetooth Low Energy 和 USB 有线连接。
 
 步骤：
 
