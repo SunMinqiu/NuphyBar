@@ -4,7 +4,7 @@ This port targets only the NuPhy Halo75 V2 ANSI QMK keyboard. It controls the fi
 
 The source baseline is NuPhy's official `nuphy-src/qmk_firmware` commit `4223dece7852b9fd9abd7c61559272241ef4a223`, dated 2025-03-25. The audited Halo75 V2 ANSI tree is `601063bb3bf91073d364063e69fedddbbef1e049`. NuPhy's official Halo75 V2 ANSI v2.1.5 recovery image has SHA-256 `4393adb563b93051552af1161a9f3c460d549adea413e1dca3ab8a27505d61c0`.
 
-Over USB, the app sends one checksummed 32-byte Raw HID report when the state changes. The USB product string is changed to `NuPhy Halo75 V2 NuphyBar`, so the app never mistakes stock firmware for a compatible device. Over Bluetooth, the app sends one standard two-byte keyboard LED Output Report and the firmware reads the host mask from NuPhy's existing `dev_info.rf_led` field. All animation frames are rendered locally and the stock Halolight returns while idle.
+Over USB, the app sends one checksummed 32-byte Raw HID report when the state changes. The USB product string is changed to `NuPhy Halo75 V2 NuphyBar`, so the app never mistakes stock firmware for a compatible device. Over Bluetooth, the app sends one standard two-byte keyboard LED Output Report and the firmware reads the host mask from NuPhy's existing `dev_info.rf_led` field. The host owns Bluetooth state expiry because repeated Output Reports with the same value are indistinguishable from an unchanged radio state inside the keyboard firmware. All animation frames are rendered locally and the stock Halolight returns while idle.
 
 | State | Upper-left light |
 | --- | --- |

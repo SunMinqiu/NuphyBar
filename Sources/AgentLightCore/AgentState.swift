@@ -52,7 +52,6 @@ public struct AgentStatePresentation: Equatable, Sendable {
 
 public struct AgentState: Codable, Equatable, Sendable {
     public static let completionRetention: Int64 = 15
-    public static let activeRetention: Int64 = 15 * 60
 
     public var sessions: [AgentSessionKey: AgentSessionRecord]
 
@@ -108,7 +107,7 @@ public struct AgentState: Codable, Equatable, Sendable {
             case .idle: return false
             case .complete, .error: return age <= Self.completionRetention
             case .working, .toolRunning, .outputting, .waiting:
-                return age <= Self.activeRetention
+                return true
             }
         }
     }
@@ -120,7 +119,7 @@ public struct AgentState: Codable, Equatable, Sendable {
         case .complete, .error:
             return record.updatedAt + Self.completionRetention + 1
         case .working, .toolRunning, .outputting, .waiting:
-            return record.updatedAt + Self.activeRetention + 1
+            return nil
         }
     }
 }

@@ -215,7 +215,7 @@ Display priority is:
 error/waiting > tool running > outputting > working > complete > idle
 ```
 
-One completed session never hides another session that is still working. Completion is retained for about 15 seconds, and stale active sessions are pruned automatically.
+One completed session never hides another session that is still working. Completion is retained for about 15 seconds. Active states do not expire and remain visible until an explicit lifecycle event ends the session.
 
 ## Flash the Air60 V2 firmware
 

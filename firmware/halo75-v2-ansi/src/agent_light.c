@@ -19,7 +19,6 @@ static agent_light_state_t current_state = AGENT_LIGHT_IDLE;
 static uint32_t state_started_at;
 static agent_light_state_t wireless_state = AGENT_LIGHT_IDLE;
 static uint32_t wireless_state_started_at;
-static bool wireless_state_expired;
 static uint8_t previous_link_mode = LINK_USB;
 
 bool agent_light_handle_via_command(uint8_t *data, uint8_t length) {
@@ -43,7 +42,6 @@ void agent_light_render_overlay(void) {
         current_state = AGENT_LIGHT_IDLE;
         wireless_state = AGENT_LIGHT_IDLE;
         wireless_state_started_at = now;
-        wireless_state_expired = false;
         previous_link_mode = dev_info.link_mode;
     }
 
@@ -63,30 +61,23 @@ void agent_light_render_overlay(void) {
         if (next_state != wireless_state) {
             wireless_state = next_state;
             wireless_state_started_at = now;
-            wireless_state_expired = false;
         }
         displayed_state = wireless_state;
         started_at = wireless_state_started_at;
     } else {
         wireless_state = AGENT_LIGHT_IDLE;
         wireless_state_started_at = now;
-        wireless_state_expired = false;
         return;
     }
 
     if (displayed_state == AGENT_LIGHT_IDLE) return;
-    if (!is_usb && wireless_state_expired) return;
 
     uint32_t elapsed_ms = now - started_at;
     uint32_t timeout_ms = displayed_state == AGENT_LIGHT_COMPLETE || displayed_state == AGENT_LIGHT_ERROR
         ? TERMINAL_STATE_TIMEOUT_MS
         : ACTIVE_STATE_TIMEOUT_MS;
-    if (elapsed_ms > timeout_ms) {
-        if (is_usb) {
-            current_state = AGENT_LIGHT_IDLE;
-        } else {
-            wireless_state_expired = true;
-        }
+    if (is_usb && elapsed_ms > timeout_ms) {
+        current_state = AGENT_LIGHT_IDLE;
         return;
     }
 

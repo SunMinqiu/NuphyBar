@@ -10,7 +10,7 @@ public struct AgentStateFile: Sendable {
     public static var defaultURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appending(path: "AgentLight", directoryHint: .isDirectory)
-            .appending(path: "state.json")
+            .appending(path: "state-v2.json")
     }
 
     public let url: URL
