@@ -36,7 +36,6 @@ func halo75V2RawHIDReport() {
 @Test("AULA F99 Pro real-time reports expose every state without configuration writes")
 func aulaF99ProRealtimeReport() {
     let expectedColors: [(AgentLightCommand, [UInt8])] = [
-        (.idle, [0x00, 0xFF, 0x00]),
         (.working, [0xFF, 0x00, 0x00]),
         (.toolRunning, [0xFF, 0x00, 0x00]),
         (.outputting, [0xFF, 0xB0, 0x00]),
@@ -52,4 +51,8 @@ func aulaF99ProRealtimeReport() {
         #expect(Array(report[5...7]) == color)
         #expect(AULAF99ProRealtimeProtocol.hasValidChecksum(report))
     }
+
+    let idle = AULAF99ProRealtimeProtocol.encode(.idle)
+    #expect(Array(idle.prefix(5)) == [0x13, 0x03, 0x00, 0x00, 0x00])
+    #expect(AULAF99ProRealtimeProtocol.hasValidChecksum(idle))
 }

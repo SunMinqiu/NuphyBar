@@ -67,9 +67,15 @@ public enum AULAF99ProRealtimeProtocol {
     public static let reportLength = 20
 
     public static func encode(_ command: AgentLightCommand) -> [UInt8] {
-        let color = color(for: command)
         var report = [UInt8](repeating: 0, count: reportLength)
         report[0] = UInt8(reportID)
+        if command == .idle {
+            report[1] = 0x03
+            report[reportLength - 1] = checksum(report.dropLast())
+            return report
+        }
+
+        let color = color(for: command)
         report[1] = 0x88
         report[2] = 0x01
         report[4] = 0x23
@@ -87,7 +93,8 @@ public enum AULAF99ProRealtimeProtocol {
 
     private static func color(for command: AgentLightCommand) -> (red: UInt8, green: UInt8, blue: UInt8) {
         switch command {
-        case .idle, .complete: return (0x00, 0xFF, 0x00)
+        case .idle: return (0x00, 0x00, 0x00)
+        case .complete: return (0x00, 0xFF, 0x00)
         case .working: return (0xFF, 0x00, 0x00)
         case .toolRunning: return (0xFF, 0x00, 0x00)
         case .outputting: return (0xFF, 0xB0, 0x00)

@@ -140,7 +140,7 @@ private struct LightStatusList: View {
                     row(.toolRunning, title: language.text(.error), detail: language.text(.fullKeyboardRed), time: time)
                 }
                 if profile == .aulaF99ProBluetooth {
-                    row(.complete, title: language.text(.idle), detail: language.text(.fullKeyboardGreen), time: time)
+                    row(.idle, title: language.text(.idle), detail: language.text(.factoryEffect), time: time)
                 } else {
                     row(.idle, title: language.text(.idle), detail: language.text(.factoryEffect), time: time)
                 }

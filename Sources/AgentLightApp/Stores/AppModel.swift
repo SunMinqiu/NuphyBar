@@ -283,6 +283,7 @@ final class AppModel {
               var state = try? AgentStateFile().load() else { return }
         let now = Int64(Date().timeIntervalSince1970)
         let command = state.presentation(now: now).command
+        guard command != .idle else { return }
 
         perform {
             try await self.keyboard.send(command)
