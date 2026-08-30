@@ -15,6 +15,18 @@ func reconnectingReplaysTheCurrentState() {
     #expect(delivery.shouldSend(.working))
 }
 
+@Test("a new Agent event replays an unchanged keyboard state")
+func agentEventReplaysTheCurrentState() {
+    var delivery = AgentCommandDeliveryState()
+
+    delivery.markDelivered(.working)
+    #expect(!delivery.shouldSend(.working))
+
+    delivery.stateEventReceived()
+
+    #expect(delivery.shouldSend(.working))
+}
+
 @Test("a failed delivery waits for the HID session to recover")
 func failedDeliveryWaitsForRecovery() {
     var delivery = AgentCommandDeliveryState()
@@ -22,6 +34,8 @@ func failedDeliveryWaitsForRecovery() {
     #expect(delivery.shouldSend(.waiting))
     delivery.markFailed()
 
+    #expect(!delivery.shouldSend(.waiting))
+    delivery.stateEventReceived()
     #expect(!delivery.shouldSend(.waiting))
 
     delivery.connectionRestored()
@@ -32,15 +46,21 @@ func failedDeliveryWaitsForRecovery() {
 @Test("state changes during a HID send are coalesced into one follow-up refresh")
 func stateChangesDuringSendAreCoalesced() {
     var activity = AgentDeliveryActivity()
+    var delivery = AgentCommandDeliveryState()
 
     let began = activity.begin()
     #expect(began)
     activity.requestRefresh()
     activity.requestRefresh()
+    delivery.markDelivered(.working)
 
     let shouldRefresh = activity.finish()
+    if shouldRefresh {
+        delivery.stateEventReceived()
+    }
     #expect(shouldRefresh)
     #expect(!activity.isSending)
+    #expect(delivery.shouldSend(.working))
 }
 
 @Test("a completed HID send does not refresh without a new state event")

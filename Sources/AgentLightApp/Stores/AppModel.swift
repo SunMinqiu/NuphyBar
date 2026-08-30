@@ -103,6 +103,7 @@ final class AppModel {
         Task {
             defer {
                 if deliveryActivity.finish() {
+                    deliveryState.stateEventReceived()
                     applyAgentStateIfChanged()
                 }
             }
@@ -122,7 +123,7 @@ final class AppModel {
         do {
             agentStateObservation = try AgentStateChangeNotification.observe { [weak self] in
                 Task { @MainActor [weak self] in
-                    self?.applyAgentStateIfChanged()
+                    self?.handleAgentStateChange()
                 }
             }
         } catch {
@@ -232,6 +233,11 @@ final class AppModel {
         }
     }
 
+    private func handleAgentStateChange() {
+        deliveryState.stateEventReceived()
+        applyAgentStateIfChanged()
+    }
+
     private func scheduleAgentExpiration(_ expiration: Int64?, now: Int64) {
         agentExpirationTask?.cancel()
         guard let expiration else {
@@ -323,6 +329,11 @@ struct AgentCommandDeliveryState {
     mutating func connectionRestored() {
         lastDeliveredCommand = nil
         canAttemptDelivery = true
+    }
+
+    mutating func stateEventReceived() {
+        guard canAttemptDelivery else { return }
+        lastDeliveredCommand = nil
     }
 }
 
