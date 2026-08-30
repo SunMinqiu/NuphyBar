@@ -24,6 +24,8 @@ func codexHookMapping() throws {
     #expect(try HookEventMapper.map(provider: .codex, eventName: "PermissionRequest", payload: payload)?.status == .waiting)
     #expect(try HookEventMapper.map(provider: .codex, eventName: "PostToolUse", payload: payload)?.status == .working)
     #expect(try HookEventMapper.map(provider: .codex, eventName: "Stop", payload: payload)?.status == .complete)
+    #expect(try HookEventMapper.map(provider: .codex, eventName: "SessionEnd", payload: payload)?.status == .idle)
+    #expect(HookEventMapper.response(provider: .codex, eventName: "Stop") == Data("{}".utf8))
 }
 
 @Test("Claude only treats notifications that need user input as waiting")
@@ -58,7 +60,7 @@ func antigravityHookResponses() throws {
 
     #expect(try JSONSerialization.jsonObject(with: invocation) as? [String: String] == [:])
     #expect((try JSONSerialization.jsonObject(with: stop) as? [String: String])?["decision"] == "stop")
-    #expect(HookEventMapper.response(provider: .codex, eventName: "Stop") == nil)
+    #expect(HookEventMapper.response(provider: .codex, eventName: "Stop") == Data("{}".utf8))
 }
 
 @Test("unknown hooks are ignored and malformed payloads are rejected")

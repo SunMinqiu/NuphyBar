@@ -28,6 +28,7 @@ func codexInstallPreservesConfiguration() throws {
     #expect(hooks["UserPromptSubmit"] != nil)
     #expect(hooks["PermissionRequest"] != nil)
     #expect(hooks["PostToolUse"] != nil)
+    #expect(hooks["SessionEnd"] != nil)
 }
 
 @Test("installing a new app replaces hooks that point to an older app copy")
@@ -113,6 +114,9 @@ func codexIntegrationRecognizesTrustedHooks() throws {
 
     [hooks.state."\(hooksPath):stop:0:0"]
     trusted_hash = "sha256:four"
+
+    [hooks.state."\(hooksPath):session_end:0:0"]
+    trusted_hash = "sha256:five"
     """
     try Data(config.utf8).write(to: home.appending(path: ".codex/config.toml"))
 

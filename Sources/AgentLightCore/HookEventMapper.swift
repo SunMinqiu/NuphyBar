@@ -47,6 +47,9 @@ public enum HookEventMapper {
     }
 
     public static func response(provider: AgentProvider, eventName: String) -> Data? {
+        if provider == .codex, eventName == "Stop" {
+            return Data("{}".utf8)
+        }
         guard provider == .antigravity else { return nil }
         switch eventName {
         case "PreInvocation": return Data("{}".utf8)
@@ -65,6 +68,8 @@ public enum HookEventMapper {
             return .waiting
         case (.codex, "Stop"):
             return .complete
+        case (.codex, "SessionEnd"):
+            return .idle
         case (.claudeCode, "UserPromptSubmit"), (.claudeCode, "PreToolUse"), (.claudeCode, "PostToolUse"):
             return .working
         case (.claudeCode, "PermissionRequest"):
