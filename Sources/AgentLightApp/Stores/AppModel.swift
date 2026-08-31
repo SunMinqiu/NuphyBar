@@ -24,6 +24,7 @@ final class AppModel {
     @ObservationIgnored private var deliveryState = AgentCommandDeliveryState()
     @ObservationIgnored private var deliveryActivity = AgentDeliveryActivity()
     @ObservationIgnored private var agentStateObservation: AgentStateChangeObservation?
+    @ObservationIgnored private var agentStateFileChanges = AgentStateFileChangeTracker()
     @ObservationIgnored private var agentExpirationTask: Task<Void, Never>?
     @ObservationIgnored private var agentFallbackTask: Task<Void, Never>?
     @ObservationIgnored private var aulaRealtimeRGBKeepaliveTask: Task<Void, Never>?
@@ -120,6 +121,7 @@ final class AppModel {
     }
 
     private func startAgentMonitor() {
+        agentStateFileChanges.synchronize(with: agentStateFileModificationDate())
         do {
             agentStateObservation = try AgentStateChangeNotification.observe { [weak self] in
                 Task { @MainActor [weak self] in
@@ -130,8 +132,8 @@ final class AppModel {
             agentStateLogger.error(
                 "Could not register Agent state notifications: \(String(describing: error), privacy: .public)"
             )
-            startAgentFallbackMonitor()
         }
+        startAgentFallbackMonitor()
         applyAgentStateIfChanged()
     }
 
@@ -143,9 +145,19 @@ final class AppModel {
                 } catch {
                     return
                 }
-                self?.applyAgentStateIfChanged()
+                guard let self else { return }
+                let modificationDate = agentStateFileModificationDate()
+                if agentStateFileChanges.changed(to: modificationDate) {
+                    handleAgentStateChange()
+                }
             }
         }
+    }
+
+    private func agentStateFileModificationDate() -> Date? {
+        try? AgentStateFile.defaultURL.resourceValues(
+            forKeys: [.contentModificationDateKey]
+        ).contentModificationDate
     }
 
     private func startKeyboardConnectionObserver() {
@@ -234,6 +246,7 @@ final class AppModel {
     }
 
     private func handleAgentStateChange() {
+        agentStateFileChanges.synchronize(with: agentStateFileModificationDate())
         deliveryState.stateEventReceived()
         applyAgentStateIfChanged()
     }
@@ -334,6 +347,26 @@ struct AgentCommandDeliveryState {
     mutating func stateEventReceived() {
         guard canAttemptDelivery else { return }
         lastDeliveredCommand = nil
+    }
+}
+
+struct AgentStateFileChangeTracker {
+    private var lastModificationDate: Date?
+    private var isSynchronized = false
+
+    mutating func synchronize(with modificationDate: Date?) {
+        lastModificationDate = modificationDate
+        isSynchronized = true
+    }
+
+    mutating func changed(to modificationDate: Date?) -> Bool {
+        guard isSynchronized else {
+            synchronize(with: modificationDate)
+            return false
+        }
+        guard modificationDate != lastModificationDate else { return false }
+        lastModificationDate = modificationDate
+        return true
     }
 }
 

@@ -1,4 +1,5 @@
 import AgentLightCore
+import Foundation
 import Testing
 @testable import AgentLightApp
 
@@ -71,4 +72,23 @@ func completedSendWithoutStateChangeDoesNotRefresh() {
     let shouldRefresh = activity.finish()
     #expect(began)
     #expect(!shouldRefresh)
+}
+
+@Test("state file watchdog detects changes after initial synchronization")
+func stateFileWatchdogDetectsChanges() {
+    var tracker = AgentStateFileChangeTracker()
+    let first = Date(timeIntervalSince1970: 100)
+    let second = Date(timeIntervalSince1970: 101)
+
+    let initialChange = tracker.changed(to: first)
+    let repeatedInitialChange = tracker.changed(to: first)
+    let laterChange = tracker.changed(to: second)
+    let repeatedLaterChange = tracker.changed(to: second)
+    let deletionChange = tracker.changed(to: nil)
+
+    #expect(!initialChange)
+    #expect(!repeatedInitialChange)
+    #expect(laterChange)
+    #expect(!repeatedLaterChange)
+    #expect(deletionChange)
 }
