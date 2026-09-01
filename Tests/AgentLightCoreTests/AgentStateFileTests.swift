@@ -44,6 +44,21 @@ func missingStateStartsEmpty() throws {
     #expect(try file.load() == AgentState())
 }
 
+@Test("clearing persisted state removes every active session")
+func clearingStateRemovesEverySession() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let file = AgentStateFile(url: directory.appending(path: "state.json"))
+
+    _ = try file.apply(.init(provider: .codex, sessionID: "one", status: .working), now: 100)
+    _ = try file.apply(.init(provider: .claudeCode, sessionID: "two", status: .waiting), now: 101)
+
+    try file.clear()
+
+    #expect(try file.load() == AgentState())
+}
+
 @Test("a damaged transient state file repairs itself on the next event")
 func damagedStateRepairsOnNextEvent() throws {
     let directory = FileManager.default.temporaryDirectory

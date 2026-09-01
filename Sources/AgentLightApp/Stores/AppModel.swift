@@ -30,7 +30,7 @@ final class AppModel {
     @ObservationIgnored private var aulaRealtimeRGBKeepaliveTask: Task<Void, Never>?
     @ObservationIgnored private var keyboardConnectionTask: Task<Void, Never>?
     @ObservationIgnored private var integrationNoticeTask: Task<Void, Never>?
-    @ObservationIgnored private var systemWakeMonitor: SystemWakeMonitor?
+    @ObservationIgnored private var systemLifecycleMonitor: SystemLifecycleMonitor?
     @ObservationIgnored private var isDeliveryReady = false
 
     init() {
@@ -42,7 +42,7 @@ final class AppModel {
         refreshConnection()
         refreshIntegrations()
         startAgentMonitor()
-        startSystemWakeMonitor()
+        startSystemLifecycleMonitor()
     }
 
     func refreshConnection() {
@@ -170,9 +170,24 @@ final class AppModel {
         }
     }
 
-    private func startSystemWakeMonitor() {
-        systemWakeMonitor = SystemWakeMonitor { [weak self] in
-            self?.rebuildHIDSessionAfterWake()
+    private func startSystemLifecycleMonitor() {
+        systemLifecycleMonitor = SystemLifecycleMonitor(
+            resumeHandler: { [weak self] in
+                self?.rebuildHIDSessionAfterWake()
+            },
+            suspendHandler: { [weak self] in
+                self?.clearAgentStateForSuspend()
+            }
+        )
+    }
+
+    private func clearAgentStateForSuspend() {
+        do {
+            try AgentStateFile().clear()
+        } catch {
+            agentStateLogger.error(
+                "Could not clear Agent state before suspend: \(String(describing: error), privacy: .public)"
+            )
         }
     }
 

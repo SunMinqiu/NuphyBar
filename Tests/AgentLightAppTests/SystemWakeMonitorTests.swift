@@ -3,22 +3,30 @@ import Testing
 @testable import AgentLightApp
 
 @MainActor
-private final class WakeRecoveryCounter {
-    var value = 0
+private final class LifecycleCounter {
+    var resumes = 0
+    var suspends = 0
 }
 
 @MainActor
-@Test("a workspace wake notification invokes the HID recovery handler once")
-func workspaceWakeInvokesRecoveryHandler() {
+@Test("workspace lifecycle notifications invoke their recovery handlers")
+func workspaceLifecycleInvokesRecoveryHandlers() {
     let center = NotificationCenter()
-    let notification = Notification.Name("NuphyBar.Tests.didWake")
-    let recoveryCount = WakeRecoveryCounter()
-    let monitor = SystemWakeMonitor(center: center, notification: notification) {
-        recoveryCount.value += 1
-    }
+    let resume = Notification.Name("NuphyBar.Tests.resume")
+    let suspend = Notification.Name("NuphyBar.Tests.suspend")
+    let count = LifecycleCounter()
+    let monitor = SystemLifecycleMonitor(
+        center: center,
+        resumeNotifications: [resume],
+        suspendNotifications: [suspend],
+        resumeHandler: { count.resumes += 1 },
+        suspendHandler: { count.suspends += 1 }
+    )
 
-    center.post(name: notification, object: nil)
+    center.post(name: suspend, object: nil)
+    center.post(name: resume, object: nil)
 
-    #expect(recoveryCount.value == 1)
+    #expect(count.suspends == 1)
+    #expect(count.resumes == 1)
     withExtendedLifetime(monitor) {}
 }

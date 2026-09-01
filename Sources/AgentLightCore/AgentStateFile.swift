@@ -40,6 +40,13 @@ public struct AgentStateFile: Sendable {
         return command
     }
 
+    public func clear() throws {
+        try withLock {
+            try saveUnlocked(AgentState())
+        }
+        AgentStateChangeNotification.post()
+    }
+
     private func loadUnlocked() throws -> AgentState {
         guard FileManager.default.fileExists(atPath: url.path) else { return AgentState() }
         let data = try Data(contentsOf: url)
