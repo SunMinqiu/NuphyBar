@@ -7,6 +7,7 @@ import OSLog
 
 private let hidLogger = Logger(subsystem: "com.maige.NuphyBar", category: "HID")
 private let agentStateLogger = Logger(subsystem: "com.maige.NuphyBar", category: "AgentState")
+private let idleHIDSessionRefreshInterval: Int64 = 60
 
 @MainActor
 @Observable
@@ -256,12 +257,26 @@ final class AppModel {
 
         perform {
             try await self.keyboard.send(presentation.command)
-            self.deliveryState.markDelivered(presentation.command)
+            self.deliveryState.markDelivered(presentation.command, now: now)
         }
     }
 
     private func handleAgentStateChange() {
         agentStateFileChanges.synchronize(with: agentStateFileModificationDate())
+        let now = Int64(Date().timeIntervalSince1970)
+        if isDeliveryReady,
+           keyboardModel?.localizedCaseInsensitiveContains("NuPhy") == true,
+           deliveryState.needsSessionRefresh(
+               now: now,
+               after: idleHIDSessionRefreshInterval
+           ) {
+            isDeliveryReady = false
+            hidLogger.info("Agent event arrived after an idle interval; rebuilding the keyboard HID session")
+            Task {
+                await keyboard.rebuildSession()
+            }
+            return
+        }
         deliveryState.stateEventReceived()
         applyAgentStateIfChanged()
     }
@@ -321,7 +336,7 @@ final class AppModel {
 
         perform {
             try await self.keyboard.send(command)
-            self.deliveryState.markDelivered(command)
+            self.deliveryState.markDelivered(command, now: now)
         }
     }
 
@@ -338,30 +353,39 @@ final class AppModel {
 
 struct AgentCommandDeliveryState {
     private var lastDeliveredCommand: AgentLightCommand?
+    private var lastDeliveredAt: Int64?
     private var canAttemptDelivery = true
 
     func shouldSend(_ command: AgentLightCommand) -> Bool {
         canAttemptDelivery && command != lastDeliveredCommand
     }
 
-    mutating func markDelivered(_ command: AgentLightCommand) {
+    mutating func markDelivered(_ command: AgentLightCommand, now: Int64) {
         lastDeliveredCommand = command
+        lastDeliveredAt = now
         canAttemptDelivery = true
     }
 
     mutating func markFailed() {
         lastDeliveredCommand = nil
+        lastDeliveredAt = nil
         canAttemptDelivery = false
     }
 
     mutating func connectionRestored() {
         lastDeliveredCommand = nil
+        lastDeliveredAt = nil
         canAttemptDelivery = true
     }
 
     mutating func stateEventReceived() {
         guard canAttemptDelivery else { return }
         lastDeliveredCommand = nil
+    }
+
+    func needsSessionRefresh(now: Int64, after interval: Int64) -> Bool {
+        guard canAttemptDelivery, let lastDeliveredAt else { return false }
+        return max(0, now - lastDeliveredAt) >= interval
     }
 }
 

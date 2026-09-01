@@ -8,7 +8,7 @@ func reconnectingReplaysTheCurrentState() {
     var delivery = AgentCommandDeliveryState()
 
     #expect(delivery.shouldSend(.working))
-    delivery.markDelivered(.working)
+    delivery.markDelivered(.working, now: 100)
     #expect(!delivery.shouldSend(.working))
 
     delivery.connectionRestored()
@@ -20,7 +20,7 @@ func reconnectingReplaysTheCurrentState() {
 func agentEventReplaysTheCurrentState() {
     var delivery = AgentCommandDeliveryState()
 
-    delivery.markDelivered(.working)
+    delivery.markDelivered(.working, now: 100)
     #expect(!delivery.shouldSend(.working))
 
     delivery.stateEventReceived()
@@ -53,7 +53,7 @@ func stateChangesDuringSendAreCoalesced() {
     #expect(began)
     activity.requestRefresh()
     activity.requestRefresh()
-    delivery.markDelivered(.working)
+    delivery.markDelivered(.working, now: 100)
 
     let shouldRefresh = activity.finish()
     if shouldRefresh {
@@ -72,6 +72,19 @@ func completedSendWithoutStateChangeDoesNotRefresh() {
     let shouldRefresh = activity.finish()
     #expect(began)
     #expect(!shouldRefresh)
+}
+
+@Test("a NuPhy HID session refreshes after a quiet delivery interval")
+func idleDeliveryIntervalRefreshesTheSession() {
+    var delivery = AgentCommandDeliveryState()
+
+    #expect(!delivery.needsSessionRefresh(now: 100, after: 60))
+    delivery.markDelivered(.working, now: 100)
+    #expect(!delivery.needsSessionRefresh(now: 159, after: 60))
+    #expect(delivery.needsSessionRefresh(now: 160, after: 60))
+
+    delivery.connectionRestored()
+    #expect(!delivery.needsSessionRefresh(now: 300, after: 60))
 }
 
 @Test("state file watchdog detects changes after initial synchronization")
