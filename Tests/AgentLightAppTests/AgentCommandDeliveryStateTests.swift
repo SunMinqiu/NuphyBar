@@ -8,7 +8,7 @@ func reconnectingReplaysTheCurrentState() {
     var delivery = AgentCommandDeliveryState()
 
     #expect(delivery.shouldSend(.working))
-    delivery.markDelivered(.working, now: 100)
+    delivery.markDelivered(.working)
     #expect(!delivery.shouldSend(.working))
 
     delivery.connectionRestored()
@@ -20,7 +20,7 @@ func reconnectingReplaysTheCurrentState() {
 func agentEventReplaysTheCurrentState() {
     var delivery = AgentCommandDeliveryState()
 
-    delivery.markDelivered(.working, now: 100)
+    delivery.markDelivered(.working)
     #expect(!delivery.shouldSend(.working))
 
     delivery.stateEventReceived()
@@ -53,7 +53,7 @@ func stateChangesDuringSendAreCoalesced() {
     #expect(began)
     activity.requestRefresh()
     activity.requestRefresh()
-    delivery.markDelivered(.working, now: 100)
+    delivery.markDelivered(.working)
 
     let shouldRefresh = activity.finish()
     if shouldRefresh {
@@ -74,19 +74,6 @@ func completedSendWithoutStateChangeDoesNotRefresh() {
     #expect(!shouldRefresh)
 }
 
-@Test("a NuPhy HID session refreshes after a quiet delivery interval")
-func idleDeliveryIntervalRefreshesTheSession() {
-    var delivery = AgentCommandDeliveryState()
-
-    #expect(!delivery.needsSessionRefresh(now: 100, after: 60))
-    delivery.markDelivered(.working, now: 100)
-    #expect(!delivery.needsSessionRefresh(now: 159, after: 60))
-    #expect(delivery.needsSessionRefresh(now: 160, after: 60))
-
-    delivery.connectionRestored()
-    #expect(!delivery.needsSessionRefresh(now: 300, after: 60))
-}
-
 @Test("state file watchdog detects changes after initial synchronization")
 func stateFileWatchdogDetectsChanges() {
     var tracker = AgentStateFileChangeTracker()
@@ -104,4 +91,12 @@ func stateFileWatchdogDetectsChanges() {
     #expect(laterChange)
     #expect(!repeatedLaterChange)
     #expect(deletionChange)
+}
+
+@Test("NuPhy keyboards use a fresh HID session for each delivery")
+func nuphyDeliveryUsesFreshHIDSession() {
+    #expect(KeyboardController.usesFreshSession(productName: "NuPhy Halo75 V2-1"))
+    #expect(KeyboardController.usesFreshSession(productName: " nuphy Air60 V2 "))
+    #expect(!KeyboardController.usesFreshSession(productName: "AULA-F99Pro 5.0"))
+    #expect(!KeyboardController.usesFreshSession(productName: nil))
 }
