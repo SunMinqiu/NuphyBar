@@ -2,6 +2,20 @@ import Foundation
 import Testing
 @testable import AgentLightCore
 
+@Test("Codex session cleanup respects the three-second hook limit")
+func codexSessionEndTimeout() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let installer = IntegrationInstaller(homeURL: directory, helperPath: "/test/agent-light")
+    try installer.install(.codex)
+    let data = try Data(contentsOf: directory.appending(path: ".codex/hooks.json"))
+    let root = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let hooks = try #require(root["hooks"] as? [String: Any])
+    let groups = try #require(hooks["SessionEnd"] as? [[String: Any]])
+    let handlers = try #require(groups.first?["hooks"] as? [[String: Any]])
+    #expect(handlers.first?["timeout"] as? Int == 3)
+}
+
 @Test("Codex install enables hooks and preserves notify plus existing hooks")
 func codexInstallPreservesConfiguration() throws {
     let home = try temporaryHome()

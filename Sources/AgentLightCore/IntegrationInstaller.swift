@@ -296,7 +296,7 @@ public struct IntegrationInstaller: Sendable {
                 "hooks": [[
                     "type": "command",
                     "command": command(provider: provider, event: event),
-                    "timeout": 10,
+                    "timeout": provider == .codex && event == "SessionEnd" ? 3 : 10,
                 ]],
             ]
             if let matcher = matchers[event] {

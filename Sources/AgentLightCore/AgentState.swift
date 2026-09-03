@@ -32,11 +32,13 @@ public struct AgentEvent: Equatable, Sendable {
     public let provider: AgentProvider
     public let sessionID: String
     public let status: AgentSessionStatus
+    public let turnID: String?
 
-    public init(provider: AgentProvider, sessionID: String, status: AgentSessionStatus) {
+    public init(provider: AgentProvider, sessionID: String, status: AgentSessionStatus, turnID: String? = nil) {
         self.provider = provider
         self.sessionID = sessionID
         self.status = status
+        self.turnID = turnID
     }
 }
 

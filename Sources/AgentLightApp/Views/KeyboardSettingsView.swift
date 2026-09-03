@@ -41,6 +41,18 @@ struct KeyboardSettingsView: View {
                     }
                 }
                 .frame(height: 44)
+
+                Divider()
+
+                HStack {
+                    Text(language.text(.recoveryDiagnostics))
+                        .font(.system(size: SettingsLayout.primaryTextSize))
+                    Spacer()
+                    Button(language.text(.exportDiagnostics)) { model.exportRecoveryDiagnostics() }
+                        .font(.system(size: SettingsLayout.actionTextSize))
+                        .controlSize(.small)
+                }
+                .frame(height: 36)
             }
 
             SettingsGroup(title: language.text(.lightStatus)) {
@@ -49,6 +61,12 @@ struct KeyboardSettingsView: View {
 
             if let keyboardError = model.keyboardError {
                 SettingsNotice(text: keyboardError, isError: true)
+            }
+            if let agentStateError = model.agentStateError {
+                SettingsNotice(text: agentStateError, isError: true)
+            }
+            if let diagnosticsError = model.diagnosticsError {
+                SettingsNotice(text: diagnosticsError, isError: true)
             }
         }
     }
@@ -59,13 +77,16 @@ struct KeyboardSettingsView: View {
     }
 
     private var statusColor: Color {
-        if model.isConnected { return .green }
+        if model.keyboardError != nil { return .red }
+        if model.isDeliveryReady { return .green }
         if model.hidAccessState == .granted { return .orange }
         return .red
     }
 
     private var statusText: String {
         if model.isConnected {
+            if model.keyboardError != nil { return language.text(.keyboardSendFailed) }
+            if !model.isDeliveryReady { return language.text(.keyboardRecovering) }
             return language.text(lightingProfile == .halo75USB ? .wiredConnected : .bluetoothConnected)
         }
         switch model.hidAccessState {

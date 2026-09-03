@@ -28,6 +28,14 @@ func codexHookMapping() throws {
     #expect(HookEventMapper.response(provider: .codex, eventName: "Stop") == Data("{}".utf8))
 }
 
+@Test("Codex turn identity is retained without recording transcript or prompt text")
+func codexTurnIdentity() throws {
+    let payload = Data(#"{"session_id":"session","turn_id":"turn","prompt":"private","transcript_path":"/private/chat"}"#.utf8)
+    let event = try HookEventMapper.map(provider: .codex, eventName: "UserPromptSubmit", payload: payload)
+    #expect(event?.turnID == "turn")
+    #expect(event?.sessionID == "session")
+}
+
 @Test("Claude only treats notifications that need user input as waiting")
 func claudeHookMapping() throws {
     let needsInput = Data(#"{"session_id":"claude-1","notification_type":"agent_needs_input"}"#.utf8)

@@ -26,6 +26,10 @@ enum AppText {
     case checkingKeyboard
     case accessRequired
     case keyboardNotFound
+    case keyboardRecovering
+    case keyboardSendFailed
+    case recoveryDiagnostics
+    case exportDiagnostics
     case working
     case blueFlow
     case thinking
@@ -136,6 +140,14 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         case (.english, .accessRequired): "Keyboard access required"
         case (.simplifiedChinese, .keyboardNotFound): "未找到兼容键盘"
         case (.english, .keyboardNotFound): "No compatible keyboard found"
+        case (.simplifiedChinese, .keyboardRecovering): "正在恢复键盘连接…"
+        case (.english, .keyboardRecovering): "Recovering keyboard connection…"
+        case (.simplifiedChinese, .keyboardSendFailed): "灯光发送失败"
+        case (.english, .keyboardSendFailed): "Light status delivery failed"
+        case (.simplifiedChinese, .recoveryDiagnostics): "恢复诊断"
+        case (.english, .recoveryDiagnostics): "Recovery Diagnostics"
+        case (.simplifiedChinese, .exportDiagnostics): "导出"
+        case (.english, .exportDiagnostics): "Export"
         case (.simplifiedChinese, .working): "工作中"
         case (.english, .working): "Working"
         case (.simplifiedChinese, .blueFlow): "蓝色流光"

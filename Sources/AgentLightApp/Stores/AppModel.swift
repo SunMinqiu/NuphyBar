@@ -14,42 +14,74 @@ final class AppModel {
     var keyboardModel: String?
     var isConnected = false
     var keyboardError: String?
+    var agentStateError: String?
+    var isDeliveryReady = false
     var integrationError: String?
+    var diagnosticsError: String?
     var integrationStatuses: [AgentProvider: IntegrationStatus] = [:]
     var hidAccessState: NuPhyHIDAccessState = .unknown
     var integrationNoticeProvider: AgentProvider?
 
-    private let keyboard = KeyboardController()
+    private let keyboard: any KeyboardControlling
+    private let stateFile: AgentStateFile
+    private let checkAccess: @Sendable () -> NuPhyHIDAccessState
+    private let now: @Sendable () -> Int64
+    private let diagnostics: RecoveryDiagnostics
     private let integrations: IntegrationController
     @ObservationIgnored private var deliveryState = AgentCommandDeliveryState()
-    @ObservationIgnored private var deliveryActivity = AgentDeliveryActivity()
     @ObservationIgnored private var agentStateObservation: AgentStateChangeObservation?
-    @ObservationIgnored private var agentStateFileChanges = AgentStateFileChangeTracker()
+    @ObservationIgnored private var lastAgentState: AgentState?
+    @ObservationIgnored private var stateRevision: UInt64 = 0
     @ObservationIgnored private var agentExpirationTask: Task<Void, Never>?
     @ObservationIgnored private var agentFallbackTask: Task<Void, Never>?
     @ObservationIgnored private var aulaRealtimeRGBKeepaliveTask: Task<Void, Never>?
     @ObservationIgnored private var keyboardConnectionTask: Task<Void, Never>?
     @ObservationIgnored private var integrationNoticeTask: Task<Void, Never>?
     @ObservationIgnored private var systemLifecycleMonitor: SystemLifecycleMonitor?
-    @ObservationIgnored private var isDeliveryReady = false
 
-    init() {
+    init(keyboard: any KeyboardControlling = KeyboardController(),
+         stateFile: AgentStateFile = AgentStateFile(),
+         checkAccess: @escaping @Sendable () -> NuPhyHIDAccessState = { NuPhyHIDTransport.accessState },
+         now: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) },
+         diagnostics: RecoveryDiagnostics = .shared,
+         startMonitoring: Bool = true) {
+        self.keyboard = keyboard
+        self.stateFile = stateFile
+        self.checkAccess = checkAccess
+        self.now = now
+        self.diagnostics = diagnostics
         let helperPath = Bundle.main.bundleURL
             .appending(path: "Contents/Helpers/agent-light")
             .path
         integrations = IntegrationController(helperPath: helperPath)
-        startKeyboardConnectionObserver()
-        refreshConnection()
-        refreshIntegrations()
-        startAgentMonitor()
-        startSystemLifecycleMonitor()
+        diagnostics.record("app.started", fields: [
+            "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development",
+            "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "development",
+            "source": Bundle.main.object(forInfoDictionaryKey: "NuphyBarSourceRevision") as? String ?? "development",
+        ])
+        if startMonitoring {
+            startKeyboardConnectionObserver()
+            refreshConnection()
+            refreshIntegrations()
+            startAgentMonitor()
+            startSystemLifecycleMonitor()
+        }
+    }
+
+    deinit {
+        agentExpirationTask?.cancel()
+        agentFallbackTask?.cancel()
+        aulaRealtimeRGBKeepaliveTask?.cancel()
+        keyboardConnectionTask?.cancel()
+        integrationNoticeTask?.cancel()
     }
 
     func refreshConnection() {
-        hidAccessState = NuPhyHIDTransport.accessState
+        hidAccessState = checkAccess()
         if hidAccessState != .granted {
             isConnected = false
             isDeliveryReady = false
+            deliveryState.connect(nil)
             keyboardModel = nil
             keyboardError = nil
             updateAULARealtimeRGBKeepalive()
@@ -78,6 +110,19 @@ final class AppModel {
         NSWorkspace.shared.open(url)
     }
 
+    func exportRecoveryDiagnostics() {
+        do {
+            let data = try diagnostics.export()
+            let panel = NSSavePanel()
+            panel.nameFieldStringValue = "NuphyBar-recovery-diagnostics.json"
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            try data.write(to: url, options: .atomic)
+            diagnosticsError = nil
+        } catch {
+            diagnosticsError = "诊断导出失败：\(error.localizedDescription)"
+        }
+    }
+
     func refreshIntegrations() {
         Task {
             integrationStatuses = await integrations.statuses()
@@ -98,30 +143,7 @@ final class AppModel {
         }
     }
 
-    private func perform(_ operation: @escaping @MainActor () async throws -> Void) {
-        guard deliveryActivity.begin() else { return }
-        keyboardError = nil
-        Task {
-            defer {
-                if deliveryActivity.finish() {
-                    deliveryState.stateEventReceived()
-                    applyAgentStateIfChanged()
-                }
-            }
-            do {
-                try await operation()
-            } catch {
-                if error is NuPhyHIDError {
-                    deliveryState.markFailed()
-                }
-                keyboardError = error.localizedDescription
-                hidLogger.error("Keyboard state send failed: \(String(describing: error), privacy: .public)")
-            }
-        }
-    }
-
     private func startAgentMonitor() {
-        agentStateFileChanges.synchronize(with: agentStateFileModificationDate())
         do {
             agentStateObservation = try AgentStateChangeNotification.observe { [weak self] in
                 Task { @MainActor [weak self] in
@@ -146,18 +168,9 @@ final class AppModel {
                     return
                 }
                 guard let self else { return }
-                let modificationDate = agentStateFileModificationDate()
-                if agentStateFileChanges.changed(to: modificationDate) {
-                    handleAgentStateChange()
-                }
+                handleAgentStateChange()
             }
         }
-    }
-
-    private func agentStateFileModificationDate() -> Date? {
-        try? AgentStateFile.defaultURL.resourceValues(
-            forKeys: [.contentModificationDateKey]
-        ).contentModificationDate
     }
 
     private func startKeyboardConnectionObserver() {
@@ -174,33 +187,26 @@ final class AppModel {
         systemLifecycleMonitor = SystemLifecycleMonitor(
             resumeHandler: { [weak self] in
                 self?.rebuildHIDSessionAfterWake()
-            },
-            suspendHandler: { [weak self] in
-                self?.clearAgentStateForSuspend()
             }
         )
     }
 
-    private func clearAgentStateForSuspend() {
-        do {
-            try AgentStateFile().clear()
-        } catch {
-            agentStateLogger.error(
-                "Could not clear Agent state before suspend: \(String(describing: error), privacy: .public)"
-            )
-        }
-    }
-
     private func rebuildHIDSessionAfterWake() {
         isDeliveryReady = false
+        deliveryState.connect(nil)
         hidLogger.info("Mac woke from sleep; rebuilding the keyboard HID session")
         Task {
             await keyboard.rebuildSession()
         }
     }
 
-    private func handleKeyboardConnection(_ state: NuPhyHIDConnectionState) {
-        hidAccessState = NuPhyHIDTransport.accessState
+    func handleKeyboardConnection(_ state: NuPhyHIDConnectionState) {
+        hidAccessState = checkAccess()
+        if case .connected(_, .ready(let identity)) = state {
+            deliveryState.connect(identity)
+        } else {
+            deliveryState.connect(nil)
+        }
         switch state {
         case .disconnected:
             isConnected = false
@@ -221,16 +227,12 @@ final class AppModel {
             keyboardError = nil
 
         case .connected(let productName, .ready):
-            let shouldReplayState = !isDeliveryReady
             keyboardModel = productName
             isConnected = true
             isDeliveryReady = true
             keyboardError = nil
-            if shouldReplayState {
-                deliveryState.connectionRestored()
-                hidLogger.info("Keyboard HID session is ready")
-                applyAgentStateIfChanged()
-            }
+            hidLogger.info("Keyboard HID session is ready")
+            applyAgentStateIfChanged()
 
         case .unavailable(let error):
             isConnected = false
@@ -241,31 +243,52 @@ final class AppModel {
         updateAULARealtimeRGBKeepalive()
     }
 
-    private func applyAgentStateIfChanged() {
-        guard var state = try? AgentStateFile().load() else { return }
-        let now = Int64(Date().timeIntervalSince1970)
+    func applyAgentStateIfChanged(force: Bool = false) {
+        var state: AgentState
+        do {
+            state = try stateFile.load()
+            agentStateError = nil
+        } catch {
+            if agentStateError != error.localizedDescription {
+                agentStateLogger.error("Cannot read Agent state: \(String(describing: error), privacy: .public)")
+            }
+            agentStateError = error.localizedDescription
+            return
+        }
+        if state != lastAgentState {
+            stateRevision &+= 1
+            lastAgentState = state
+            diagnostics.record("state.target.changed", fields: [
+                "revision": String(stateRevision),
+            ])
+        }
+        let now = now()
         let presentation = state.presentation(now: now)
         scheduleAgentExpiration(presentation.nextExpiration, now: now)
 
-        guard hidAccessState == .granted, isConnected, isDeliveryReady else { return }
-        if deliveryActivity.isSending {
-            deliveryActivity.requestRefresh()
-            return
-        }
-        guard deliveryState.shouldSend(presentation.command) else { return }
-
-        perform {
-            try await self.keyboard.send(
-                presentation.command,
-                productName: self.keyboardModel
-            )
-            self.deliveryState.markDelivered(presentation.command)
+        deliveryState.update(command: presentation.command, revision: stateRevision)
+        guard hidAccessState == .granted, isConnected, isDeliveryReady,
+              let attempt = deliveryState.begin(force: force && presentation.command != .idle) else { return }
+        diagnostics.record("delivery.requested", fields: ["revision": String(stateRevision),
+            "command": String(describing: attempt.target.command),
+            "connection": attempt.connection.selectionID.uuidString])
+        Task {
+            do {
+                try await keyboard.send(attempt.target.command, connection: attempt.connection)
+                if deliveryState.finish(attempt, succeeded: true) {
+                    keyboardError = nil
+                }
+            } catch {
+                if deliveryState.finish(attempt, succeeded: false) {
+                    keyboardError = error.localizedDescription
+                }
+                hidLogger.error("Keyboard state send failed: \(String(describing: error), privacy: .public)")
+            }
+            applyAgentStateIfChanged()
         }
     }
 
     private func handleAgentStateChange() {
-        agentStateFileChanges.synchronize(with: agentStateFileModificationDate())
-        deliveryState.stateEventReceived()
         applyAgentStateIfChanged()
     }
 
@@ -316,16 +339,8 @@ final class AppModel {
               isConnected,
               isDeliveryReady,
               keyboardModel?.trimmingCharacters(in: .whitespacesAndNewlines)
-                .caseInsensitiveCompare("AULA-F99Pro 5.0") == .orderedSame,
-              var state = try? AgentStateFile().load() else { return }
-        let now = Int64(Date().timeIntervalSince1970)
-        let command = state.presentation(now: now).command
-        guard command != .idle else { return }
-
-        perform {
-            try await self.keyboard.send(command, productName: self.keyboardModel)
-            self.deliveryState.markDelivered(command)
-        }
+                .caseInsensitiveCompare("AULA-F99Pro 5.0") == .orderedSame else { return }
+        applyAgentStateIfChanged(force: true)
     }
 
     private func showIntegrationNotice(for provider: AgentProvider) {
@@ -336,78 +351,5 @@ final class AppModel {
             guard !Task.isCancelled else { return }
             self?.integrationNoticeProvider = nil
         }
-    }
-}
-
-struct AgentCommandDeliveryState {
-    private var lastDeliveredCommand: AgentLightCommand?
-    private var canAttemptDelivery = true
-
-    func shouldSend(_ command: AgentLightCommand) -> Bool {
-        canAttemptDelivery && command != lastDeliveredCommand
-    }
-
-    mutating func markDelivered(_ command: AgentLightCommand) {
-        lastDeliveredCommand = command
-        canAttemptDelivery = true
-    }
-
-    mutating func markFailed() {
-        lastDeliveredCommand = nil
-        canAttemptDelivery = false
-    }
-
-    mutating func connectionRestored() {
-        lastDeliveredCommand = nil
-        canAttemptDelivery = true
-    }
-
-    mutating func stateEventReceived() {
-        guard canAttemptDelivery else { return }
-        lastDeliveredCommand = nil
-    }
-}
-
-struct AgentStateFileChangeTracker {
-    private var lastModificationDate: Date?
-    private var isSynchronized = false
-
-    mutating func synchronize(with modificationDate: Date?) {
-        lastModificationDate = modificationDate
-        isSynchronized = true
-    }
-
-    mutating func changed(to modificationDate: Date?) -> Bool {
-        guard isSynchronized else {
-            synchronize(with: modificationDate)
-            return false
-        }
-        guard modificationDate != lastModificationDate else { return false }
-        lastModificationDate = modificationDate
-        return true
-    }
-}
-
-struct AgentDeliveryActivity {
-    private(set) var isSending = false
-    private var refreshPending = false
-
-    mutating func begin() -> Bool {
-        guard !isSending else { return false }
-        isSending = true
-        return true
-    }
-
-    mutating func requestRefresh() {
-        if isSending {
-            refreshPending = true
-        }
-    }
-
-    mutating func finish() -> Bool {
-        let shouldRefresh = refreshPending
-        isSending = false
-        refreshPending = false
-        return shouldRefresh
     }
 }

@@ -1,7 +1,14 @@
 import AgentLightCore
 import AgentLightHID
 
-actor KeyboardController {
+protocol KeyboardControlling: Sendable {
+    func connectionStates() async -> AsyncStream<NuPhyHIDConnectionState>
+    func refresh() async
+    func rebuildSession() async
+    func send(_ command: AgentLightCommand, connection: HIDConnectionIdentity) async throws
+}
+
+actor KeyboardController: KeyboardControlling {
     private let transport = NuPhyHIDTransport()
 
     func connectionStates() -> AsyncStream<NuPhyHIDConnectionState> {
@@ -16,23 +23,7 @@ actor KeyboardController {
         transport.rebuildSession()
     }
 
-    func send(_ command: AgentLightCommand, productName: String?) throws {
-        guard Self.usesFreshSession(productName: productName) else {
-            try transport.send(command)
-            return
-        }
-
-        do {
-            try NuPhyHIDTransport().send(command)
-        } catch {
-            transport.rebuildSession()
-            throw error
-        }
-    }
-
-    static func usesFreshSession(productName: String?) -> Bool {
-        productName?.trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-            .hasPrefix("nuphy") == true
+    func send(_ command: AgentLightCommand, connection: HIDConnectionIdentity) throws {
+        try transport.send(command, expectedConnection: connection)
     }
 }

@@ -43,7 +43,8 @@ public enum HookEventMapper {
               let sessionID = input.resolvedSessionID, !sessionID.isEmpty else {
             throw HookEventError.invalidPayload
         }
-        return AgentEvent(provider: provider, sessionID: sessionID, status: status)
+        return AgentEvent(provider: provider, sessionID: sessionID, status: status,
+            turnID: provider == .codex ? input.turnID : nil)
     }
 
     public static func response(provider: AgentProvider, eventName: String) -> Data? {
@@ -93,6 +94,7 @@ public enum HookEventMapper {
 }
 
 private struct HookInput: Decodable {
+    let turnID: String?
     let sessionID: String?
     let camelCaseSessionID: String?
     let notificationType: String?
@@ -109,6 +111,7 @@ private struct HookInput: Decodable {
     }
 
     enum CodingKeys: String, CodingKey {
+        case turnID = "turn_id"
         case sessionID = "session_id"
         case camelCaseSessionID = "sessionId"
         case notificationType = "notification_type"

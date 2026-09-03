@@ -3,8 +3,8 @@ set -euo pipefail
 
 APP_NAME="NuphyBar"
 BUNDLE_ID="com.maige.NuphyBar"
-APP_VERSION="${APP_VERSION:-0.5.11}"
-BUILD_VERSION="${BUILD_VERSION:-27}"
+APP_VERSION="${APP_VERSION:-0.5.12}"
+BUILD_VERSION="${BUILD_VERSION:-28}"
 MIN_SYSTEM_VERSION="14.0"
 DESIGNATED_REQUIREMENT="designated => identifier \"$BUNDLE_ID\""
 
@@ -24,6 +24,10 @@ APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 
 cd "$ROOT_DIR"
+SOURCE_REVISION="$(git rev-parse --short=12 HEAD)"
+if [ -n "$(git status --porcelain)" ]; then
+  SOURCE_REVISION="$SOURCE_REVISION-dirty"
+fi
 swift build -c release
 BIN_DIR="$(swift build -c release --show-bin-path)"
 
@@ -60,6 +64,8 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
   <string>$BUILD_VERSION</string>
+  <key>NuphyBarSourceRevision</key>
+  <string>$SOURCE_REVISION</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>LSMinimumSystemVersion</key>

@@ -1,9 +1,17 @@
 import Darwin
 import Foundation
 
-public enum AgentStateFileError: Error {
+public enum AgentStateFileError: Error, LocalizedError {
     case lockOpenFailed
     case lockFailed
+    case invalidState
+
+    public var errorDescription: String? {
+        switch self {
+        case .lockOpenFailed, .lockFailed: return "无法锁定任务状态文件"
+        case .invalidState: return "任务状态文件无法读取，原文件已保留"
+        }
+    }
 }
 
 public struct AgentStateFile: Sendable {
@@ -40,17 +48,14 @@ public struct AgentStateFile: Sendable {
         return command
     }
 
-    public func clear() throws {
-        try withLock {
-            try saveUnlocked(AgentState())
-        }
-        AgentStateChangeNotification.post()
-    }
-
     private func loadUnlocked() throws -> AgentState {
         guard FileManager.default.fileExists(atPath: url.path) else { return AgentState() }
         let data = try Data(contentsOf: url)
-        return (try? JSONDecoder().decode(AgentState.self, from: data)) ?? AgentState()
+        do {
+            return try JSONDecoder().decode(AgentState.self, from: data)
+        } catch {
+            throw AgentStateFileError.invalidState
+        }
     }
 
     private func saveUnlocked(_ state: AgentState) throws {
