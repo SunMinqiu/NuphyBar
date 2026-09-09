@@ -38,6 +38,13 @@ final class AppModel {
     @ObservationIgnored private var keyboardConnectionTask: Task<Void, Never>?
     @ObservationIgnored private var integrationNoticeTask: Task<Void, Never>?
     @ObservationIgnored private var systemLifecycleMonitor: SystemLifecycleMonitor?
+    @ObservationIgnored private var aulaPowerMonitor: AULAPowerMonitor?
+    private var aulaDelivery: AULADeliveryController?
+    var aulaNotice: String? { isAULA ? aulaDelivery?.notice : nil }
+    private var isAULA: Bool {
+        keyboardModel?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .caseInsensitiveCompare("AULA-F99Pro 5.0") == .orderedSame
+    }
 
     init(keyboard: any KeyboardControlling = KeyboardController(),
          stateFile: AgentStateFile = AgentStateFile(),
@@ -54,12 +61,19 @@ final class AppModel {
             .appending(path: "Contents/Helpers/agent-light")
             .path
         integrations = IntegrationController(helperPath: helperPath)
+        aulaDelivery = AULADeliveryController(keyboard: keyboard, environment: { [weak self] in
+            self?.aulaPowerMonitor?.pauseReason()
+        }, diagnostics: diagnostics)
         diagnostics.record("app.started", fields: [
             "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development",
             "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "development",
             "source": Bundle.main.object(forInfoDictionaryKey: "NuphyBarSourceRevision") as? String ?? "development",
         ])
         if startMonitoring {
+            aulaPowerMonitor = AULAPowerMonitor { [weak self] in
+                guard let self, self.isAULA else { return }
+                self.applyAgentStateIfChanged()
+            }
             startKeyboardConnectionObserver()
             refreshConnection()
             refreshIntegrations()
@@ -82,6 +96,7 @@ final class AppModel {
             isConnected = false
             isDeliveryReady = false
             deliveryState.connect(nil)
+            aulaDelivery?.connect(nil)
             keyboardModel = nil
             keyboardError = nil
             updateAULARealtimeRGBKeepalive()
@@ -192,6 +207,10 @@ final class AppModel {
     }
 
     private func rebuildHIDSessionAfterWake() {
+        if isAULA {
+            applyAgentStateIfChanged()
+            return
+        }
         isDeliveryReady = false
         deliveryState.connect(nil)
         hidLogger.info("Mac woke from sleep; rebuilding the keyboard HID session")
@@ -202,6 +221,13 @@ final class AppModel {
 
     func handleKeyboardConnection(_ state: NuPhyHIDConnectionState) {
         hidAccessState = checkAccess()
+        if case .connected(let name, .ready(let identity)) = state,
+           name.trimmingCharacters(in: .whitespacesAndNewlines)
+            .caseInsensitiveCompare("AULA-F99Pro 5.0") == .orderedSame {
+            aulaDelivery?.connect(identity)
+        } else {
+            aulaDelivery?.connect(nil)
+        }
         if case .connected(_, .ready(let identity)) = state {
             deliveryState.connect(identity)
         } else {
@@ -266,6 +292,11 @@ final class AppModel {
         let presentation = state.presentation(now: now)
         scheduleAgentExpiration(presentation.nextExpiration, now: now)
 
+        if isAULA {
+            guard hidAccessState == .granted else { return }
+            aulaDelivery?.update(presentation.command, refresh: force)
+            return
+        }
         deliveryState.update(command: presentation.command, revision: stateRevision)
         guard hidAccessState == .granted, isConnected, isDeliveryReady,
               let attempt = deliveryState.begin(force: force && presentation.command != .idle) else { return }

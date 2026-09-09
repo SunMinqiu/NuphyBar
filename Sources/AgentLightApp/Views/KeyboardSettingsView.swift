@@ -59,6 +59,9 @@ struct KeyboardSettingsView: View {
                 LightStatusList(profile: lightingProfile)
             }
 
+            if let notice = model.aulaNotice {
+                SettingsNotice(text: notice, isError: false)
+            }
             if let keyboardError = model.keyboardError {
                 SettingsNotice(text: keyboardError, isError: true)
             }
@@ -77,6 +80,7 @@ struct KeyboardSettingsView: View {
     }
 
     private var statusColor: Color {
+        if model.aulaNotice != nil { return .orange }
         if model.keyboardError != nil { return .red }
         if model.isDeliveryReady { return .green }
         if model.hidAccessState == .granted { return .orange }
@@ -84,6 +88,7 @@ struct KeyboardSettingsView: View {
     }
 
     private var statusText: String {
+        if let notice = model.aulaNotice { return notice }
         if model.isConnected {
             if model.keyboardError != nil { return language.text(.keyboardSendFailed) }
             if !model.isDeliveryReady { return language.text(.keyboardRecovering) }

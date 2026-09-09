@@ -23,8 +23,8 @@ private func waitForCommands(_ count: Int, keyboard: RecordingKeyboard) async {
 }
 
 @MainActor
-@Test("the app reads offline completion and delivers idle on reconnect")
-func appRestoresLatestPersistedState() async throws {
+@Test("the app reads offline completion and delivers idle on reconnect", arguments: ["NuPhy Halo75 V2-1", "AULA-F99Pro 5.0"])
+func appRestoresLatestPersistedState(productName: String) async throws {
     let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: folder) }
     let file = AgentStateFile(url: folder.appending(path: "state.json"))
@@ -32,20 +32,20 @@ func appRestoresLatestPersistedState() async throws {
     let keyboard = RecordingKeyboard()
     let app = AppModel(keyboard: keyboard, stateFile: file, checkAccess: { .granted },
         now: { 100 }, diagnostics: RecoveryDiagnostics(), startMonitoring: false)
-    app.handleKeyboardConnection(.connected(productName: "NuPhy Halo75 V2-1",
+    app.handleKeyboardConnection(.connected(productName: productName,
         delivery: .ready(HIDConnectionIdentity(sessionID: UUID(), deviceID: 1))))
     await waitForCommands(1, keyboard: keyboard)
     app.handleKeyboardConnection(.disconnected)
     _ = try file.apply(.init(provider: .codex, sessionID: "test", status: .complete), now: 50)
-    app.handleKeyboardConnection(.connected(productName: "NuPhy Halo75 V2-1",
+    app.handleKeyboardConnection(.connected(productName: productName,
         delivery: .ready(HIDConnectionIdentity(sessionID: UUID(), deviceID: 1))))
     await waitForCommands(2, keyboard: keyboard)
     #expect(await keyboard.commands == [.working, .idle])
 }
 
 @MainActor
-@Test("polling reads changed contents even when the file timestamp is unchanged")
-func appReadsChangedContents() async throws {
+@Test("polling reads changed contents even when the file timestamp is unchanged", arguments: ["NuPhy Halo75 V2-1", "AULA-F99Pro 5.0"])
+func appReadsChangedContents(productName: String) async throws {
     let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: folder) }
     let file = AgentStateFile(url: folder.appending(path: "state.json"))
@@ -54,7 +54,7 @@ func appReadsChangedContents() async throws {
     let keyboard = RecordingKeyboard()
     let app = AppModel(keyboard: keyboard, stateFile: file, checkAccess: { .granted },
         now: { 100 }, diagnostics: RecoveryDiagnostics(), startMonitoring: false)
-    app.handleKeyboardConnection(.connected(productName: "NuPhy Halo75 V2-1",
+    app.handleKeyboardConnection(.connected(productName: productName,
         delivery: .ready(HIDConnectionIdentity(sessionID: UUID(), deviceID: 1))))
     await waitForCommands(1, keyboard: keyboard)
     _ = try file.apply(.init(provider: .codex, sessionID: "test", status: .waiting), now: 1)

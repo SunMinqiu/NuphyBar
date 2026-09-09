@@ -113,6 +113,27 @@ private final class HIDRig: @unchecked Sendable {
     }
 }
 
+@Test("only AULA preserves its connection on a system permission refusal", arguments: [NuPhyHIDDeviceProfile.aulaF99ProBluetooth, .halo75V2Bluetooth, .halo75V2USB, .air60V2Bluetooth])
+func profilePermissionRefusal(profile: NuPhyHIDDeviceProfile) throws {
+    let rig = HIDRig(device: FakeDevice(profile: profile))
+    let transport = rig.makeTransport()
+    let original = transport.connectionState
+    rig.device.error = .reportFailed(kIOReturnNotPermitted)
+    #expect(throws: NuPhyHIDError.reportFailed(kIOReturnNotPermitted)) { try transport.send(.working) }
+    rig.drain(transport)
+    if profile == .aulaF99ProBluetooth {
+        #expect(transport.connectionState == original)
+        #expect(rig.managers.count == 1)
+        #expect(rig.managers[0].cancellationCount == 0)
+        rig.device.error = nil
+        try transport.send(.working)
+        #expect(rig.device.reports == [AULAF99ProRealtimeProtocol.encode(.working)])
+    } else {
+        #expect(rig.managers[0].cancellationCount == 1)
+        #expect(rig.managers.count > 1)
+    }
+}
+
 @Test("rebuilding rediscovers the same keyboard and sends through the new manager")
 func rebuildSameDeviceThenSend() throws {
     let rig = HIDRig()

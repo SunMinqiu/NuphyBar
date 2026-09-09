@@ -102,6 +102,7 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
     private let schedule: @Sendable (DispatchQueue, TimeInterval, DispatchWorkItem) -> Void
     private var manager: (any HIDManagerSession)?
     private var activeSessionID: UUID?
+    private var lastAULASuccess: (connection: HIDConnectionIdentity, command: AgentLightCommand, time: TimeInterval)?
     private var cancellingSessionID: UUID?
     private struct SelectedDevice {
         let device: any HIDDeviceHandle
@@ -338,16 +339,28 @@ public final class NuPhyHIDTransport: @unchecked Sendable {
                         )
                     }
                     reconnectBackoff.reset()
-                    diagnostics.record("hid.write.accepted", fields: [
-                        "connection": selectedDevice.identity.selectionID.uuidString,
-                        "profile": String(describing: selectedDevice.profile),
-                        "command": String(describing: command),
-                    ])
+                    let timestamp = ProcessInfo.processInfo.systemUptime
+                    let logSuccess = selectedDevice.profile != .aulaF99ProBluetooth
+                        || lastAULASuccess?.connection != selectedDevice.identity
+                        || lastAULASuccess?.command != command
+                        || timestamp - (lastAULASuccess?.time ?? 0) >= 60
+                    if logSuccess {
+                        if selectedDevice.profile == .aulaF99ProBluetooth {
+                            lastAULASuccess = (selectedDevice.identity, command, timestamp)
+                        }
+                        diagnostics.record("hid.write.accepted", fields: [
+                            "connection": selectedDevice.identity.selectionID.uuidString,
+                            "profile": String(describing: selectedDevice.profile),
+                            "command": String(describing: command),
+                        ])
+                    }
                     return selectedDevice.identity
                 } catch let error as NuPhyHIDError {
                     diagnostics.record("hid.write.failed", fields: ["error": error.description,
                         "connection": selectedDevice.identity.selectionID.uuidString])
-                    recoverFromReportFailure(error, productName: productName(of: currentDevice))
+                    if selectedDevice.profile != .aulaF99ProBluetooth || error != .reportFailed(kIOReturnNotPermitted) {
+                        recoverFromReportFailure(error, productName: productName(of: currentDevice))
+                    }
                     throw error
                 }
             }
