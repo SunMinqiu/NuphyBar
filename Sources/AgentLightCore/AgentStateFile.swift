@@ -22,13 +22,26 @@ public struct AgentStateFile: Sendable {
     }
 
     public let url: URL
+    private let ownerStatus: @Sendable (AgentProcessOwner) -> AgentOwnerStatus
 
-    public init(url: URL = Self.defaultURL) {
+    public init(url: URL = Self.defaultURL,
+                ownerStatus: @escaping @Sendable (AgentProcessOwner) -> AgentOwnerStatus = { $0.status() }) {
         self.url = url
+        self.ownerStatus = ownerStatus
     }
 
     public func load() throws -> AgentState {
-        try withLock { try loadUnlocked() }
+        try withLock {
+            var state = try loadUnlocked()
+            let removed = state.reconcileOwners(check: ownerStatus)
+            if removed > 0 {
+                try saveUnlocked(state)
+                if url == Self.defaultURL {
+                    RecoveryDiagnostics.shared.record("state.owner.exited", fields: ["removed": String(removed)])
+                }
+            }
+            return state
+        }
     }
 
     public func apply(_ event: AgentEvent, now: Int64) throws -> AgentLightCommand? {

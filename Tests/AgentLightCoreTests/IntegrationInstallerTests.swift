@@ -11,9 +11,11 @@ func codexSessionEndTimeout() throws {
     let data = try Data(contentsOf: directory.appending(path: ".codex/hooks.json"))
     let root = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
     let hooks = try #require(root["hooks"] as? [String: Any])
-    let groups = try #require(hooks["SessionEnd"] as? [[String: Any]])
-    let handlers = try #require(groups.first?["hooks"] as? [[String: Any]])
-    #expect(handlers.first?["timeout"] as? Int == 3)
+    for event in ["SessionEnd", "Interrupt"] {
+        let groups = try #require(hooks[event] as? [[String: Any]])
+        let handlers = try #require(groups.first?["hooks"] as? [[String: Any]])
+        #expect(handlers.first?["timeout"] as? Int == 3)
+    }
 }
 
 @Test("Codex install enables hooks and preserves notify plus existing hooks")
@@ -131,6 +133,9 @@ func codexIntegrationRecognizesTrustedHooks() throws {
 
     [hooks.state."\(hooksPath):session_end:0:0"]
     trusted_hash = "sha256:five"
+
+    [hooks.state."\(hooksPath):interrupt:0:0"]
+    trusted_hash = "sha256:six"
     """
     try Data(config.utf8).write(to: home.appending(path: ".codex/config.toml"))
 

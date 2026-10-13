@@ -43,8 +43,16 @@ public enum HookEventMapper {
               let sessionID = input.resolvedSessionID, !sessionID.isEmpty else {
             throw HookEventError.invalidPayload
         }
+        let lifecycle: AgentEventLifecycle
+        switch eventName {
+        case "UserPromptSubmit": lifecycle = .begin
+        case "Stop", "Interrupt": lifecycle = .endTurn
+        case "SessionEnd": lifecycle = .endSession
+        default: lifecycle = .activity
+        }
         return AgentEvent(provider: provider, sessionID: sessionID, status: status,
-            turnID: provider == .codex ? input.turnID : nil)
+            turnID: provider == .codex ? input.turnID : nil,
+            lifecycle: provider == .codex ? lifecycle : .unspecified)
     }
 
     public static func response(provider: AgentProvider, eventName: String) -> Data? {
@@ -70,6 +78,8 @@ public enum HookEventMapper {
         case (.codex, "Stop"):
             return .complete
         case (.codex, "SessionEnd"):
+            return .idle
+        case (.codex, "Interrupt"):
             return .idle
         case (.claudeCode, "UserPromptSubmit"), (.claudeCode, "PreToolUse"), (.claudeCode, "PostToolUse"):
             return .working

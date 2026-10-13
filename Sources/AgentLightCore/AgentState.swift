@@ -28,23 +28,45 @@ public struct AgentSessionKey: Codable, Hashable, Sendable {
     }
 }
 
+public enum AgentEventLifecycle: String, Codable, Sendable {
+    case unspecified, begin, activity, endTurn, endSession
+}
+
 public struct AgentEvent: Equatable, Sendable {
     public let provider: AgentProvider
     public let sessionID: String
     public let status: AgentSessionStatus
     public let turnID: String?
+    public let lifecycle: AgentEventLifecycle
+    public var owner: AgentProcessOwner?
+    public var occurredAt: Double?
 
-    public init(provider: AgentProvider, sessionID: String, status: AgentSessionStatus, turnID: String? = nil) {
+    public init(provider: AgentProvider, sessionID: String, status: AgentSessionStatus, turnID: String? = nil,
+                lifecycle: AgentEventLifecycle = .unspecified, owner: AgentProcessOwner? = nil,
+                occurredAt: Double? = nil) {
         self.provider = provider
         self.sessionID = sessionID
         self.status = status
         self.turnID = turnID
+        self.lifecycle = lifecycle
+        self.owner = owner
+        self.occurredAt = occurredAt
     }
 }
 
 public struct AgentSessionRecord: Codable, Equatable, Sendable {
     public var status: AgentSessionStatus
     public var updatedAt: Int64
+    public var owner: AgentProcessOwner? = nil
+}
+
+public struct AgentTurnLedger: Codable, Equatable, Sendable {
+    var current: String?
+    var closed: Set<String> = []
+    var lastBegin: Double = 0
+    var sessionEnded = false
+    var continuationAllowed = false
+    var lastEnd: Double = 0
 }
 
 public struct AgentStatePresentation: Equatable, Sendable {
@@ -56,19 +78,93 @@ public struct AgentState: Codable, Equatable, Sendable {
     public static let completionRetention: Int64 = 15
 
     public var sessions: [AgentSessionKey: AgentSessionRecord]
+    public var codexTurns: [String: AgentTurnLedger] = [:]
 
     public init(sessions: [AgentSessionKey: AgentSessionRecord] = [:]) {
         self.sessions = sessions
     }
 
+    private enum CodingKeys: String, CodingKey { case sessions, codexTurns }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sessions = try container.decode([AgentSessionKey: AgentSessionRecord].self, forKey: .sessions)
+        codexTurns = try container.decodeIfPresent([String: AgentTurnLedger].self, forKey: .codexTurns) ?? [:]
+    }
+
     public mutating func apply(_ event: AgentEvent, now: Int64) {
         prune(now: now)
         let key = AgentSessionKey(provider: event.provider, sessionID: event.sessionID)
+        if event.provider == .codex, event.lifecycle != .unspecified {
+            var ledger = codexTurns[event.sessionID] ?? AgentTurnLedger()
+            let started = event.occurredAt ?? Double(now)
+            switch event.lifecycle {
+            case .begin:
+                if let turn = event.turnID {
+                    if ledger.closed.contains(turn) {
+                        guard ledger.continuationAllowed, ledger.current == turn,
+                              started > ledger.lastEnd else { return }
+                        ledger.closed.remove(turn)
+                    }
+                    guard started >= ledger.lastBegin else { return }
+                    if let current = ledger.current, current != turn { ledger.closed.insert(current) }
+                    ledger.current = turn
+                }
+                ledger.lastBegin = started
+                ledger.sessionEnded = false
+                ledger.continuationAllowed = false
+            case .activity, .endTurn:
+                guard !ledger.sessionEnded else { return }
+                if let turn = event.turnID {
+                    guard !ledger.closed.contains(turn), ledger.current == nil || ledger.current == turn else { return }
+                    if ledger.current == nil { ledger.lastBegin = max(ledger.lastBegin, started) }
+                    ledger.current = turn
+                } else if ledger.current != nil {
+                    // Unscoped activity cannot overwrite a tracked turn.
+                    return
+                }
+                if event.lifecycle == .endTurn {
+                    if let current = ledger.current { ledger.closed.insert(current) }
+                    ledger.continuationAllowed = event.status == .complete
+                    ledger.lastEnd = started
+                }
+            case .endSession:
+                guard started >= ledger.lastBegin else { return }
+                if let current = ledger.current { ledger.closed.insert(current) }
+                ledger.sessionEnded = true
+                ledger.continuationAllowed = false
+            case .unspecified: break
+            }
+            codexTurns[event.sessionID] = ledger
+        }
         if event.status == .idle {
             sessions.removeValue(forKey: key)
         } else {
-            sessions[key] = AgentSessionRecord(status: event.status, updatedAt: now)
+            sessions[key] = AgentSessionRecord(status: event.status, updatedAt: now,
+                owner: event.lifecycle == .begin ? event.owner : event.owner ?? sessions[key]?.owner)
         }
+    }
+
+    @discardableResult
+    public mutating func reconcileOwners(check: (AgentProcessOwner) -> AgentOwnerStatus) -> Int {
+        var removed = 0
+        for (key, record) in sessions {
+            switch record.status {
+            case .working, .toolRunning, .outputting, .waiting: break
+            case .idle, .complete, .error: continue
+            }
+            guard let owner = record.owner, check(owner) == .exited else { continue }
+            sessions.removeValue(forKey: key)
+            if key.provider == .codex {
+                var ledger = codexTurns[key.sessionID] ?? AgentTurnLedger()
+                if let turn = ledger.current { ledger.closed.insert(turn) }
+                ledger.sessionEnded = true
+                ledger.continuationAllowed = false
+                codexTurns[key.sessionID] = ledger
+            }
+            removed += 1
+        }
+        return removed
     }
 
     public mutating func presentation(now: Int64) -> AgentStatePresentation {
