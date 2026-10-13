@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Added experimental Halo75 V2 ANSI QMK support over USB Raw HID and Bluetooth, with a separate source overlay and model-specific recovery documentation.
+- Added experimental AULA F99 Pro Bluetooth lighting using temporary stock RGB commands, secure-input/sleep suspension, and bounded retries.
+- Added tool-running and outputting protocol states, Codex tool-start/session-end hooks, connection-aware delivery, and exportable local recovery diagnostics.
+- Preserved long-running task records and automatically removed active Codex and Claude Code records only after their owning process exited.
+- Added trusted Codex Interrupt delivery and turn fencing so interrupted turns cannot be revived by late events or clear another active task.
+- Renewed active Halo USB states before the firmware timeout while keeping NuPhy Bluetooth delivery change-driven.
+- Kept Air60's amber double-pulse and green-breathing previews separate from Halo/AULA effects.
+- Included Halo installer tests in firmware checks and checked every shell script in CI.
+- Prevented spawned integration processes from retaining diagnostic and transmission file locks.
+- Rewrote both READMEs with release-versus-source guidance, exact keyboard compatibility, lighting behavior, and outstanding physical verification.
+
+These changes are not included in the published v0.5.9 assets. Air60 `stable-v7` firmware is unchanged.
+
 ## 0.5.9 — 2026-07-15
 
 ### App

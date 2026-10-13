@@ -40,7 +40,7 @@ public struct IntegrationInstaller: Sendable {
         case .codex:
             try enableCodexHooksFeature()
             try mergeHooks(at: codexHooksURL, provider: provider, events: [
-                "UserPromptSubmit", "PermissionRequest", "PostToolUse", "Stop", "SessionEnd", "Interrupt",
+                "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse", "Stop", "SessionEnd", "Interrupt",
             ])
         case .claudeCode:
             try mergeHooks(at: claudeSettingsURL, provider: provider, events: [
@@ -116,7 +116,7 @@ public struct IntegrationInstaller: Sendable {
         guard provider == .codex else { return true }
 
         let keys = codexHookTrustKeys()
-        guard keys.count == 6,
+        guard keys.count == 7,
               let config = try? String(contentsOf: resolvedURL(codexConfigURL), encoding: .utf8)
         else { return false }
         return keys.allSatisfy { configContainsTrustedHook($0, config: config) }
@@ -364,6 +364,7 @@ public struct IntegrationInstaller: Sendable {
 
         let events = [
             ("UserPromptSubmit", "user_prompt_submit"),
+            ("PreToolUse", "pre_tool_use"),
             ("PermissionRequest", "permission_request"),
             ("PostToolUse", "post_tool_use"),
             ("Stop", "stop"),
