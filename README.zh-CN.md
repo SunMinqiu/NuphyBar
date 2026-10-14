@@ -21,7 +21,7 @@ NuphyBar 是一个轻量的原生 macOS 菜单栏应用。它汇总 Codex、Clau
 | 版本 | 包含的功能 |
 |---|---|
 | [已发布的 v0.5.9](https://github.com/itsmaiGe/NuphyBar/releases/tag/v0.5.9) | Air60 V2 ANSI 蓝牙支持；提供 macOS 安装包和 `stable-v7` 固件 |
-| 当前源码，应用版本 0.5.15 | 新增 Halo75 V2 ANSI USB／蓝牙、AULA F99 Pro 蓝牙、任务所属进程清理、Codex Interrupt 处理和恢复诊断；需要自行构建 |
+| 当前源码，应用版本 0.5.16 | 新增 Halo75 V2 ANSI USB／蓝牙、AULA F99 Pro 蓝牙、进程退出及任务结束漏报清理、Codex Interrupt 处理和恢复诊断；需要自行构建 |
 
 **v0.5.9 下载包不包含 Halo75 和 AULA 的新增功能。** 新机型的贡献者实测记录与待完成验证见下文。源码合并不代表已经发布新版安装包。
 
@@ -118,7 +118,9 @@ NuPhy 在系统唤醒或报告失败后重建连接，并以受控间隔重试�
 - Halo BLE2／BLE3 切换，以及最终完整 USB 状态、VIA 和空闲恢复回归。
 - 记录准确时长的实机耐久测试；模拟小时数和重连次数不等于实机验证。
 
-活动任务没有时间上限。Codex 和 Claude Code hooks 记录任务所属进程及其启动时间；状态核对只清理已确认所属进程退出的活动记录，应用重启或唤醒后也会核对。无法访问或无法识别所属进程，不会被当成进程退出。Codex 轮次标识会拒绝已结束轮次的迟到事件，避免旧结束事件清掉新轮次。Interrupt 只移除被中断的轮次，不要求 Codex 进程退出。如果结束事件丢失且所属进程仍然存活，记录仍可能残留；旧记录及其他接入中未记录所属进程的状态会保留到收到结束事件。
+活动任务没有时间上限。Codex 和 Claude Code hooks 记录任务所属进程及其启动时间；状态核对会清理已确认所属进程退出的活动记录，应用重启或唤醒后也会核对。无法访问或无法识别所属进程，不会被当成进程退出。Codex 轮次标识会拒绝已结束轮次的迟到事件，避免旧结束事件清掉新轮次。Interrupt 只移除被中断的轮次，不要求 Codex 进程退出。
+
+如果 Codex 结束 hook 漏报，应用还会在现有的五秒核对中检查对应本地会话文件的生命周期元数据。读取范围限于文件末尾两 MiB；核实会话身份后，必须找到对应轮次明确的完成或中断事件，且没有后续未结束轮次，才清理状态。不提取或保存提示词、回复或工具正文。文件缺失、写入未完成、生命周期格式不认识或证据不足时，保留活动状态。Codex 不保证会话文件格式稳定，因此这个兜底不会把长时间静默当成结束。其他接入以及没有轮次标识的旧记录，仍依赖结束事件或确认所属进程退出。
 
 损坏的状态文件会保留并报错，不会静默覆盖。在**键盘 → 恢复诊断 → 导出**可保存有数量上限的本地日志，包含连接变化和发送结果。日志中的会话／轮次标识经过哈希处理，不记录提示词、对话正文或工具内容。HID 写入成功仅代表 macOS 接受报告，不代表已经观测到实机 LED。
 
@@ -136,7 +138,7 @@ swift build -c release
 ./script/package_release.sh
 ```
 
-Swift 包包含 `AgentLightCore` 库、`agent-light` 辅助程序和 `NuphyBar` 应用。当前打包输出为 `dist/NuphyBar-0.5.15-macOS-arm64.dmg`。只构建应用可运行 `./script/build_app.sh`；需要安装并启动时使用 `./script/build_and_run.sh`。
+Swift 包包含 `AgentLightCore` 库、`agent-light` 辅助程序和 `NuphyBar` 应用。当前打包输出为 `dist/NuphyBar-0.5.16-macOS-arm64.dmg`。只构建应用可运行 `./script/build_app.sh`；需要安装并启动时使用 `./script/build_and_run.sh`。
 
 如果 Command Line Tools 默认 SDK 缺少 SwiftUI 宏插件，可用 `swift test --sdk /path/to/MacOSX.sdk` 指定已安装且兼容的 SDK，并在 release 构建时使用相同 SDK。这属于工具链配置问题，无需为此删除应用中的 SwiftUI 状态代码。
 

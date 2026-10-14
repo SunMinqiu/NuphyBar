@@ -19,6 +19,45 @@ private final class TestUptime: @unchecked Sendable {
     func advance(to value: TimeInterval) { lock.withLock { time = value } }
 }
 
+private final class TestTurnEvidence: @unchecked Sendable {
+    private let lock = NSLock()
+    private var ended = false
+    func finish() { lock.withLock { ended = true } }
+    func read() -> CodexTurnEvidence? {
+        lock.withLock { ended ? CodexTurnEvidence(closedTurns: ["turn"], endedAt: 200) : nil }
+    }
+}
+
+@MainActor
+@Test("five-second fallback clears a missed end without another hook or process exit", arguments: [
+    "NuPhy Halo75 V2-1", "AULA-F99Pro 5.0",
+])
+func automaticMissedEndReconciliation(productName: String) async throws {
+    let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let evidence = TestTurnEvidence()
+    let file = AgentStateFile(url: folder.appending(path: "state.json"), ownerStatus: { _ in .alive },
+        turnEvidence: { _, _, _ in evidence.read() })
+    _ = try file.apply(.init(provider: .codex, sessionID: "missed-end", status: .working,
+        turnID: "turn", lifecycle: .begin, occurredAt: 1), now: 1)
+    let keyboard = RecordingKeyboard()
+    let app = AppModel(keyboard: keyboard, stateFile: file, checkAccess: { .granted },
+        now: { 100 }, diagnostics: RecoveryDiagnostics(), startMonitoring: true)
+    app.handleKeyboardConnection(.connected(productName: productName,
+        delivery: .ready(HIDConnectionIdentity(sessionID: UUID(), deviceID: 1))))
+    await waitForCommands(1, keyboard: keyboard)
+    evidence.finish()
+    let deadline = ContinuousClock.now.advanced(by: .seconds(7))
+    while ContinuousClock.now < deadline {
+        if await keyboard.commands.last == .idle { break }
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    #expect(await keyboard.commands.first == .working)
+    #expect(await keyboard.commands.last == .idle)
+    #expect(try file.load().sessions.isEmpty)
+    withExtendedLifetime(app) { }
+}
+
 @MainActor
 @Test("five-second reconciliation renews Halo USB while Bluetooth stays quiet", arguments: [
     "NuPhy Halo75 V2 NuphyBar", "NuPhy Halo75 V2-1", "NuPhy Air60 V2-1",

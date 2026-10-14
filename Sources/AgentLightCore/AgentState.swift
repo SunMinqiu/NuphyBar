@@ -100,13 +100,13 @@ public struct AgentState: Codable, Equatable, Sendable {
             let started = event.occurredAt ?? Double(now)
             switch event.lifecycle {
             case .begin:
+                guard started >= ledger.lastBegin, started > ledger.lastEnd else { return }
                 if let turn = event.turnID {
                     if ledger.closed.contains(turn) {
                         guard ledger.continuationAllowed, ledger.current == turn,
                               started > ledger.lastEnd else { return }
                         ledger.closed.remove(turn)
                     }
-                    guard started >= ledger.lastBegin else { return }
                     if let current = ledger.current, current != turn { ledger.closed.insert(current) }
                     ledger.current = turn
                 }
@@ -143,6 +143,29 @@ public struct AgentState: Codable, Equatable, Sendable {
             sessions[key] = AgentSessionRecord(status: event.status, updatedAt: now,
                 owner: event.lifecycle == .begin ? event.owner : event.owner ?? sessions[key]?.owner)
         }
+    }
+
+    @discardableResult
+    public mutating func reconcileCodexTurns(
+        check: (String, String, Double) -> CodexTurnEvidence?
+    ) -> Int {
+        var removed = 0
+        for (key, record) in sessions where key.provider == .codex {
+            switch record.status {
+            case .working, .toolRunning, .outputting, .waiting: break
+            case .idle, .complete, .error: continue
+            }
+            guard var ledger = codexTurns[key.sessionID], let turn = ledger.current,
+                  let evidence = check(key.sessionID, turn, ledger.lastBegin),
+                  evidence.closedTurns.contains(turn), evidence.endedAt >= ledger.lastBegin else { continue }
+            sessions.removeValue(forKey: key)
+            ledger.closed.formUnion(evidence.closedTurns)
+            ledger.lastEnd = max(ledger.lastEnd, evidence.endedAt)
+            ledger.continuationAllowed = false
+            codexTurns[key.sessionID] = ledger
+            removed += 1
+        }
+        return removed
     }
 
     @discardableResult

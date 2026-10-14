@@ -21,7 +21,7 @@ It does not read keystrokes, save prompts or responses, or send data to a server
 | Version | What it includes |
 |---|---|
 | [Published v0.5.9](https://github.com/itsmaiGe/NuphyBar/releases/tag/v0.5.9) | Air60 V2 ANSI over Bluetooth; downloadable macOS app and `stable-v7` firmware |
-| Current source, app version 0.5.15 | Adds Halo75 V2 ANSI USB/Bluetooth, AULA F99 Pro Bluetooth, task-owner cleanup, Codex Interrupt handling, and recovery diagnostics; build from source |
+| Current source, app version 0.5.16 | Adds Halo75 V2 ANSI USB/Bluetooth, AULA F99 Pro Bluetooth, task-owner and missed-ending cleanup, Codex Interrupt handling, and recovery diagnostics; build from source |
 
 The Halo75 and AULA additions are **not included in the v0.5.9 download**. Their contributor-reported hardware checks and remaining release checks are described below. Source availability is not a new binary release.
 
@@ -118,7 +118,9 @@ The following remain open before treating the new ports as fully release-validat
 - Halo BLE2/BLE3 channel switching and a final full USB/VIA/idle regression.
 - Physical endurance evidence with recorded durations; simulated hours and reconnects do not replace hardware checks.
 
-Active task records have no time limit. Codex and Claude Code hooks record the owning process and its start time. State reconciliation removes active records only when that owner has exited, including after app restart or wake. An inaccessible or unidentified owner is not treated as exited. Codex turn IDs reject late events from closed turns and prevent an old ending event from clearing a newer turn. Interrupt handling removes only the interrupted turn while the Codex process can remain alive. A missing ending event can still leave a record when its owner remains alive; legacy records and other integrations without an owner are retained until an ending event arrives.
+Active task records have no time limit. Codex and Claude Code hooks record the owning process and its start time. State reconciliation removes active records when that owner has exited, including after app restart or wake. An inaccessible or unidentified owner is not treated as exited. Codex turn IDs reject late events from closed turns and prevent an old ending event from clearing a newer turn. Interrupt handling removes only the interrupted turn while the Codex process can remain alive.
+
+If a Codex ending hook is missed, the app also checks the matching local rollout's lifecycle metadata during its existing five-second reconciliation. It reads a bounded two-MiB tail, verifies the session identity, and requires an explicit completion or interruption for the recorded turn with no later unfinished turn. No prompt, response, or tool content is extracted or saved. Missing files, incomplete writes, unknown lifecycle formats, and insufficient evidence preserve the active state. Codex does not guarantee a stable rollout format, so this fallback never interprets silence as completion. Other integrations and legacy records without a turn identifier still depend on their ending events or confirmed owner exit.
 
 Damaged state files are preserved and reported instead of silently overwritten. **Keyboard → Recovery Diagnostics → Export** saves a bounded local journal of connection transitions and delivery results. Session/turn identifiers are hashed in that journal; prompts, transcripts, and tool content are not recorded. A successful HID write confirms macOS accepted a report, not that a physical LED displayed it.
 
@@ -136,7 +138,7 @@ swift build -c release
 ./script/package_release.sh
 ```
 
-The package contains the `AgentLightCore` library, `agent-light` helper, and `NuphyBar` app. Packaging currently writes `dist/NuphyBar-0.5.15-macOS-arm64.dmg`. To build an app bundle only, run `./script/build_app.sh`; to install and launch locally, use `./script/build_and_run.sh`.
+The package contains the `AgentLightCore` library, `agent-light` helper, and `NuphyBar` app. Packaging currently writes `dist/NuphyBar-0.5.16-macOS-arm64.dmg`. To build an app bundle only, run `./script/build_app.sh`; to install and launch locally, use `./script/build_and_run.sh`.
 
 If a Command Line Tools installation defaults to an SDK whose SwiftUI macro plugin is missing, select a compatible installed SDK with `swift test --sdk /path/to/MacOSX.sdk` and use the same SDK for the release build. This is a toolchain setup issue; do not remove SwiftUI state from the app to work around it.
 

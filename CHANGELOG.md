@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Reconcile missed Codex ending hooks against bounded local lifecycle evidence even while the shared agent process remains alive; keep active work when evidence is missing, malformed, or superseded by an unfinished turn.
 - Added experimental Halo75 V2 ANSI QMK support over USB Raw HID and Bluetooth, with a separate source overlay and model-specific recovery documentation.
 - Added experimental AULA F99 Pro Bluetooth lighting using temporary stock RGB commands, secure-input/sleep suspension, and bounded retries.
 - Added tool-running and outputting protocol states, Codex tool-start/session-end hooks, connection-aware delivery, and exportable local recovery diagnostics.

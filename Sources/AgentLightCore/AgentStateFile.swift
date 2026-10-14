@@ -23,21 +23,32 @@ public struct AgentStateFile: Sendable {
 
     public let url: URL
     private let ownerStatus: @Sendable (AgentProcessOwner) -> AgentOwnerStatus
+    private let turnEvidence: @Sendable (String, String, Double) -> CodexTurnEvidence?
 
     public init(url: URL = Self.defaultURL,
-                ownerStatus: @escaping @Sendable (AgentProcessOwner) -> AgentOwnerStatus = { $0.status() }) {
+                ownerStatus: @escaping @Sendable (AgentProcessOwner) -> AgentOwnerStatus = { $0.status() },
+                turnEvidence: @escaping @Sendable (String, String, Double) -> CodexTurnEvidence? = {
+                    CodexTurnHistory.shared.completion(sessionID: $0, turnID: $1, beganAt: $2)
+                }) {
         self.url = url
         self.ownerStatus = ownerStatus
+        self.turnEvidence = turnEvidence
     }
 
     public func load() throws -> AgentState {
         try withLock {
             var state = try loadUnlocked()
             let removed = state.reconcileOwners(check: ownerStatus)
-            if removed > 0 {
+            let ended = state.reconcileCodexTurns(check: turnEvidence)
+            if removed > 0 || ended > 0 {
                 try saveUnlocked(state)
                 if url == Self.defaultURL {
-                    RecoveryDiagnostics.shared.record("state.owner.exited", fields: ["removed": String(removed)])
+                    if removed > 0 {
+                        RecoveryDiagnostics.shared.record("state.owner.exited", fields: ["removed": String(removed)])
+                    }
+                    if ended > 0 {
+                        RecoveryDiagnostics.shared.record("state.turn.ended", fields: ["removed": String(ended)])
+                    }
                 }
             }
             return state
