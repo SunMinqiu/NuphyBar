@@ -40,10 +40,11 @@ public struct AgentEvent: Equatable, Sendable {
     public let lifecycle: AgentEventLifecycle
     public var owner: AgentProcessOwner?
     public var occurredAt: Double?
+    public var transcriptPath: String?
 
     public init(provider: AgentProvider, sessionID: String, status: AgentSessionStatus, turnID: String? = nil,
                 lifecycle: AgentEventLifecycle = .unspecified, owner: AgentProcessOwner? = nil,
-                occurredAt: Double? = nil) {
+                occurredAt: Double? = nil, transcriptPath: String? = nil) {
         self.provider = provider
         self.sessionID = sessionID
         self.status = status
@@ -51,6 +52,7 @@ public struct AgentEvent: Equatable, Sendable {
         self.lifecycle = lifecycle
         self.owner = owner
         self.occurredAt = occurredAt
+        self.transcriptPath = transcriptPath
     }
 }
 
@@ -58,6 +60,8 @@ public struct AgentSessionRecord: Codable, Equatable, Sendable {
     public var status: AgentSessionStatus
     public var updatedAt: Int64
     public var owner: AgentProcessOwner? = nil
+    public var lastEventAt: Double? = nil
+    public var transcriptPath: String? = nil
 }
 
 public struct AgentTurnLedger: Codable, Equatable, Sendable {
@@ -79,22 +83,37 @@ public struct AgentState: Codable, Equatable, Sendable {
 
     public var sessions: [AgentSessionKey: AgentSessionRecord]
     public var codexTurns: [String: AgentTurnLedger] = [:]
+    public var claudeClosedAt: [String: Double] = [:]
 
     public init(sessions: [AgentSessionKey: AgentSessionRecord] = [:]) {
         self.sessions = sessions
     }
 
-    private enum CodingKeys: String, CodingKey { case sessions, codexTurns }
+    private enum CodingKeys: String, CodingKey { case sessions, codexTurns, claudeClosedAt }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         sessions = try container.decode([AgentSessionKey: AgentSessionRecord].self, forKey: .sessions)
         codexTurns = try container.decodeIfPresent([String: AgentTurnLedger].self, forKey: .codexTurns) ?? [:]
+        claudeClosedAt = try container.decodeIfPresent([String: Double].self, forKey: .claudeClosedAt) ?? [:]
     }
 
     public mutating func apply(_ event: AgentEvent, now: Int64) {
         prune(now: now)
         let key = AgentSessionKey(provider: event.provider, sessionID: event.sessionID)
+        if event.provider == .claudeCode, event.lifecycle != .unspecified {
+            let at = event.occurredAt ?? Double(now)
+            guard at > (claudeClosedAt[event.sessionID] ?? 0),
+                  at >= (sessions[key]?.lastEventAt ?? 0) else { return }
+            switch event.lifecycle {
+            case .endTurn, .endSession: return // Unscoped endings require session-log evidence.
+            case .activity:
+                if claudeClosedAt[event.sessionID] != nil {
+                    guard let record = sessions[key], record.status != .complete && record.status != .error else { return }
+                }
+            default: break
+            }
+        }
         if event.provider == .codex, event.lifecycle != .unspecified {
             var ledger = codexTurns[event.sessionID] ?? AgentTurnLedger()
             let started = event.occurredAt ?? Double(now)
@@ -140,9 +159,44 @@ public struct AgentState: Codable, Equatable, Sendable {
         if event.status == .idle {
             sessions.removeValue(forKey: key)
         } else {
+            let previous = sessions[key]
+            var owner = event.lifecycle == .begin ? event.owner : event.owner ?? previous?.owner
+            if event.provider == .claudeCode, event.lifecycle == .activity, let previous {
+                // An unscoped event cannot transfer a newer task to an older process owner.
+                owner = previous.owner == event.owner || event.owner == nil ? previous.owner : nil
+            }
             sessions[key] = AgentSessionRecord(status: event.status, updatedAt: now,
-                owner: event.lifecycle == .begin ? event.owner : event.owner ?? sessions[key]?.owner)
+                owner: owner,
+                lastEventAt: event.provider == .claudeCode ? event.occurredAt ?? Double(now) : nil,
+                transcriptPath: event.transcriptPath ?? previous?.transcriptPath)
         }
+    }
+
+    @discardableResult
+    public mutating func reconcileClaudeSessions(now: Int64,
+        check: (String, String?, Double) -> ClaudeTurnEvidence?) -> Int {
+        var ended = 0
+        for (key, record) in sessions where key.provider == .claudeCode {
+            switch record.status {
+            case .working, .toolRunning, .outputting, .waiting: break
+            default: continue
+            }
+            let threshold = record.lastEventAt ?? Double(record.updatedAt) + 1
+            guard let proof = check(key.sessionID, record.transcriptPath, threshold),
+                  proof.endedAt.isFinite, proof.endedAt < Double(Int64.max),
+                  proof.endedAt >= threshold, proof.status == .complete || proof.status == .error else { continue }
+            claudeClosedAt[key.sessionID] = max(claudeClosedAt[key.sessionID] ?? 0, proof.endedAt)
+            if Double(now) - proof.endedAt > Double(Self.completionRetention) {
+                sessions.removeValue(forKey: key)
+            } else {
+                var terminal = record
+                terminal.status = proof.status
+                terminal.updatedAt = Int64(proof.endedAt)
+                sessions[key] = terminal
+            }
+            ended += 1
+        }
+        return ended
     }
 
     @discardableResult
@@ -178,6 +232,10 @@ public struct AgentState: Codable, Equatable, Sendable {
             }
             guard let owner = record.owner, check(owner) == .exited else { continue }
             sessions.removeValue(forKey: key)
+            if key.provider == .claudeCode {
+                claudeClosedAt[key.sessionID] = max(claudeClosedAt[key.sessionID] ?? 0,
+                    record.lastEventAt ?? Double(record.updatedAt))
+            }
             if key.provider == .codex {
                 var ledger = codexTurns[key.sessionID] ?? AgentTurnLedger()
                 if let turn = ledger.current { ledger.closed.insert(turn) }

@@ -44,7 +44,7 @@ public struct IntegrationInstaller: Sendable {
             ])
         case .claudeCode:
             try mergeHooks(at: claudeSettingsURL, provider: provider, events: [
-                "UserPromptSubmit", "PermissionRequest", "PostToolUse", "Notification", "Stop", "SessionEnd",
+                "UserPromptSubmit", "PermissionRequest", "PostToolUse", "Notification", "Stop", "StopFailure", "SessionEnd",
             ], matchers: ["Notification": "agent_needs_input|elicitation_dialog"])
         case .openCode:
             try writeOpenCodePlugin()

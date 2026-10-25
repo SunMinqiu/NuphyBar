@@ -178,6 +178,7 @@ func claudeInstallIsSurgical() throws {
     let installed = try json(at: claude.appending(path: "settings.json"))
     let installedHooks = try #require(installed["hooks"] as? [String: Any])
     #expect(installedHooks["PostToolUse"] != nil)
+    #expect(installedHooks["StopFailure"] != nil)
     let notificationGroups = try #require(installedHooks["Notification"] as? [[String: Any]])
     #expect(notificationGroups.contains { $0["matcher"] as? String == "agent_needs_input|elicitation_dialog" })
 
@@ -188,6 +189,7 @@ func claudeInstallIsSurgical() throws {
     let hooks = try #require(root["hooks"] as? [String: Any])
     let stop = try #require(hooks["Stop"] as? [[String: Any]])
     #expect(stop.count == 1)
+    #expect(hooks["StopFailure"] == nil)
 }
 
 @Test("OpenCode uses an owned plugin file without replacing a user plugin")

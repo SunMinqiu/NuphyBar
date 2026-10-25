@@ -14,8 +14,8 @@ NuphyBar is local-only:
 
 - it does not read or store keystrokes;
 - it does not send prompts or responses to another service;
-- Agent hooks record provider, coarse lifecycle status, local session and turn identifiers, timestamps, and the owning process identity;
-- Codex fallback reconciliation reads a bounded local rollout tail and extracts only structured lifecycle metadata, never prompt, response, or tool content; missing or unknown evidence cannot end a task;
+- Agent hooks record provider, coarse lifecycle status, local session and turn identifiers, timestamps, the owning process identity, and Claude's local transcript path;
+- Codex and Claude fallback reconciliation read bounded local session-log tails and extract only lifecycle and request-chain metadata, never prompt, response, tool content, or API-error details; missing or unknown evidence cannot end a task;
 - the app sends a two-byte HID output report to a locally connected NuPhy BLE keyboard;
 - no analytics or telemetry service is bundled.
 

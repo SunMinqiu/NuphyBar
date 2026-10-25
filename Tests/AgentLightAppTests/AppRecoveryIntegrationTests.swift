@@ -86,14 +86,15 @@ private final class TestTurnEvidence: @unchecked Sendable {
 @MainActor
 @Test("five-second fallback clears a missed end without another hook or process exit", arguments: [
     "NuPhy Halo75 V2-1", "AULA-F99Pro 5.0",
-])
-func automaticMissedEndReconciliation(productName: String) async throws {
+], [AgentProvider.codex, .claudeCode])
+func automaticMissedEndReconciliation(productName: String, provider: AgentProvider) async throws {
     let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: folder) }
     let evidence = TestTurnEvidence()
     let file = AgentStateFile(url: folder.appending(path: "state.json"), ownerStatus: { _ in .alive },
-        turnEvidence: { _, _, _ in evidence.read() })
-    _ = try file.apply(.init(provider: .codex, sessionID: "missed-end", status: .working,
+        turnEvidence: { _, _, _ in evidence.read() },
+        claudeEvidence: { _, _, _ in evidence.read().map { ClaudeTurnEvidence(endedAt: $0.endedAt, status: .error) } })
+    _ = try file.apply(.init(provider: provider, sessionID: "missed-end", status: .working,
         turnID: "turn", lifecycle: .begin, occurredAt: 1), now: 1)
     let keyboard = RecordingKeyboard()
     let app = AppModel(keyboard: keyboard, stateFile: file, checkAccess: { .granted },

@@ -24,15 +24,20 @@ public struct AgentStateFile: Sendable {
     public let url: URL
     private let ownerStatus: @Sendable (AgentProcessOwner) -> AgentOwnerStatus
     private let turnEvidence: @Sendable (String, String, Double) -> CodexTurnEvidence?
+    private let claudeEvidence: @Sendable (String, String?, Double) -> ClaudeTurnEvidence?
 
     public init(url: URL = Self.defaultURL,
                 ownerStatus: @escaping @Sendable (AgentProcessOwner) -> AgentOwnerStatus = { $0.status() },
                 turnEvidence: @escaping @Sendable (String, String, Double) -> CodexTurnEvidence? = {
                     CodexTurnHistory.shared.completion(sessionID: $0, turnID: $1, beganAt: $2)
+                },
+                claudeEvidence: @escaping @Sendable (String, String?, Double) -> ClaudeTurnEvidence? = {
+                    ClaudeTurnHistory.shared.completion(sessionID: $0, transcriptPath: $1, notBefore: $2)
                 }) {
         self.url = url
         self.ownerStatus = ownerStatus
         self.turnEvidence = turnEvidence
+        self.claudeEvidence = claudeEvidence
     }
 
     public func load() throws -> AgentState {
@@ -40,7 +45,8 @@ public struct AgentStateFile: Sendable {
             var state = try loadUnlocked()
             let removed = state.reconcileOwners(check: ownerStatus)
             let ended = state.reconcileCodexTurns(check: turnEvidence)
-            if removed > 0 || ended > 0 {
+            let claudeEnded = state.reconcileClaudeSessions(now: Int64(Date().timeIntervalSince1970), check: claudeEvidence)
+            if removed > 0 || ended > 0 || claudeEnded > 0 {
                 try saveUnlocked(state)
                 if url == Self.defaultURL {
                     if removed > 0 {
@@ -48,6 +54,9 @@ public struct AgentStateFile: Sendable {
                     }
                     if ended > 0 {
                         RecoveryDiagnostics.shared.record("state.turn.ended", fields: ["removed": String(ended)])
+                    }
+                    if claudeEnded > 0 {
+                        RecoveryDiagnostics.shared.record("state.claude.ended", fields: ["ended": String(claudeEnded)])
                     }
                 }
             }
@@ -59,7 +68,18 @@ public struct AgentStateFile: Sendable {
         try withLock {
             var state = try loadUnlocked()
             let previous = state.displayCommand(now: now)
-            state.apply(event, now: now)
+            if event.provider == .claudeCode, event.lifecycle == .endTurn || event.lifecycle == .endSession {
+                let key = AgentSessionKey(provider: .claudeCode, sessionID: event.sessionID)
+                if state.sessions[key]?.transcriptPath == nil, let path = event.transcriptPath {
+                    state.sessions[key]?.transcriptPath = path
+                }
+                _ = state.reconcileClaudeSessions(now: now) { session, path, threshold in
+                    guard session == event.sessionID else { return nil }
+                    return claudeEvidence(session, path, threshold)
+                }
+            } else {
+                state.apply(event, now: now)
+            }
             let command = state.displayCommand(now: now)
             try saveUnlocked(state)
             return command == previous ? nil : command
