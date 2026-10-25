@@ -1,5 +1,4 @@
 """Exercise installed Claude hooks against a loopback-only API error."""
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -56,9 +55,14 @@ session = str(uuid.uuid4())
 server = ThreadingHTTPServer(("127.0.0.1", 0), LocalError)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 state = home / "Library/Application Support/AgentLight/state-v2.json"
-journal = state.parent / "recovery-diagnostics.json"
 process = None
 with tempfile.TemporaryDirectory(prefix="nuphybar-claude-failure-") as isolated:
+    marker = Path(isolated) / "stopfailure-exit"
+    # Observe the real installed command's exit independently of best-effort diagnostics.
+    for group in settings["hooks"]["StopFailure"]:
+        for hook in group["hooks"]:
+            hook["command"] += '; hook_result=$?; printf "%s" "$hook_result" > ' + shlex.quote(str(marker))
+            hook["command"] += '; exit "$hook_result"'
     environment = os.environ.copy()
     for key in ["ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDECODE",
                 "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"]:
@@ -96,20 +100,15 @@ with tempfile.TemporaryDirectory(prefix="nuphybar-claude-failure-") as isolated:
                 buffer += data
         assert requested.is_set(), "Claude did not reach the loopback API"
         assert result and result.get("is_error"), "Claude did not report the API failure"
-        session_hash = hashlib.sha256(session.encode()).hexdigest()[:16]
         query = '.sessions as $s | [range(0; $s|length; 2) as $i | '
         query += 'select($s[$i].sessionID==$session) | $s[$i+1].status | keys[0]]'
         deadline = time.monotonic() + 10
-        seen = b"false"
         while time.monotonic() < deadline:
-            seen = subprocess.check_output(["jq", "--arg", "session", session_hash,
-                'any(.[]; .event=="state.persisted" and .fields.provider=="claude-code" '
-                'and .fields.session==$session and .fields.status=="error")', str(journal)])
             statuses = json.loads(subprocess.check_output(["jq", "-c", "--arg", "session", session, query, str(state)]))
-            if seen.strip() == b"true" and statuses == ["error"]:
+            if marker.exists() and marker.read_text() == "0" and statuses == ["error"]:
                 break
             time.sleep(0.1)
-        assert seen.strip() == b"true", "native StopFailure did not reach the helper"
+        assert marker.exists() and marker.read_text() == "0", "native StopFailure command did not complete successfully"
         if statuses != ["error"]:
             paths = list(Path(isolated).rglob(f"{session}.jsonl"))
             print(json.dumps({"unsettled_status": statuses, "local_logs": [str(path) for path in paths]}), flush=True)
@@ -120,6 +119,7 @@ with tempfile.TemporaryDirectory(prefix="nuphybar-claude-failure-") as isolated:
                     ], input=data)
                 print(metadata.decode(), flush=True)
         assert statuses == ["error"], "failed Claude turn remained active"
+        assert process.poll() is None, "Claude owner exited before cleanup was verified"
         print(json.dumps({"native_stopfailure": "passed", "status": statuses[0],
             "owner_still_alive": process.poll() is None}), flush=True)
     finally:
