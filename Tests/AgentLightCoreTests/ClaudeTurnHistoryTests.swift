@@ -70,6 +70,32 @@ func claudeNativeAttachmentChain() throws {
     #expect(fixture.proof()?.status == .error)
 }
 
+@Test("Claude response metadata may be timestamped after its attached terminal response", arguments: [false, true])
+func claudeAttachmentTimestampOrdering(error: Bool) throws {
+    let fixture = try ClaudeFixture()
+    defer { fixture.remove() }
+    let body = try claudeLine("user") + claudeLine("api-request", time: 901)
+        + claudeLine("attachment", time: 1_000.001, id: "attached", parent: "prompt")
+        + claudeLine("assistant", time: 1_000, id: "end", parent: "attached",
+            reason: error ? "stop_sequence" : "end_turn", error: error)
+        + claudeLine("system", time: 1_000.084, id: "summary", parent: "end", extra: ["subtype": "stop_hook_summary"])
+    try fixture.write(body)
+    let proof = try #require(fixture.proof())
+    #expect(proof.status == (error ? .error : .complete))
+    #expect(proof.endedAt == 1_000)
+    #expect(fixture.proof(1_000.0005) == nil)
+    for next in [try claudeLine("user", time: 1_001, id: "next"),
+                 try claudeLine("api-request", time: 1_001),
+                 try claudeLine("attachment", time: 1_001, id: "later", parent: "end")] {
+        try fixture.write(body + next)
+        #expect(fixture.proof() == nil)
+    }
+    try fixture.write(claudeLine("user")
+        + claudeLine("attachment", time: 1_000.001, id: "unrelated", parent: "foreign")
+        + claudeLine("assistant", time: 1_000, parent: "unrelated", reason: "end_turn"))
+    #expect(fixture.proof() == nil)
+}
+
 @Test("Claude tool failure is not task failure and pending tools block completion")
 func claudeToolFailuresKeepWork() throws {
     let fixture = try ClaudeFixture()

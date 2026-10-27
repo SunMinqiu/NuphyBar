@@ -66,7 +66,8 @@ public final class ClaudeTurnHistory: @unchecked Sendable {
                         if let parent = event.parentUuid, let uuid = event.uuid, chain.contains(parent) {
                             chain.insert(uuid)
                         } else { chain = []; tools = [] }
-                        latestActivity = max(latestActivity, time)
+                        // Response attachments can be logged after the response timestamp.
+                        // Their chain position matters; they do not start another request.
                         continue
                     }
                     if event.type == "api-request" || event.type == "api-request-shape" || event.type == "queue-operation" {
