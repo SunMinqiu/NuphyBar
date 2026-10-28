@@ -4,16 +4,53 @@ import Foundation
 enum SessionLogSnapshot {
     static let tailLimit = 2 * 1024 * 1024
 
+    struct Version: Equatable {
+        let device: Int64
+        let inode: UInt64
+        let size: UInt64
+        let seconds: Int64
+        let nanoseconds: Int64
+
+        init(_ value: stat) {
+            device = Int64(value.st_dev)
+            inode = UInt64(value.st_ino)
+            size = UInt64(max(0, value.st_size))
+            seconds = Int64(value.st_mtimespec.tv_sec)
+            nanoseconds = Int64(value.st_mtimespec.tv_nsec)
+        }
+    }
+
+    struct Page {
+        let start: UInt64
+        let data: Data
+    }
+
+    static func version(url: URL) -> Version? {
+        var value = stat()
+        guard lstat(url.path, &value) == 0 else { return nil }
+        return Version(value)
+    }
+
+    static func page(url: URL, version: Version, offset: UInt64? = nil,
+        before: UInt64? = nil, limit: Int) -> Page? {
+        stableRead(url: url) { handle, current in
+            guard current == version else { return nil }
+            let end = min(before ?? current.size, current.size)
+            let start = offset ?? (end > UInt64(limit) ? end - UInt64(limit) : 0)
+            guard start <= end else { return nil }
+            try handle.seek(toOffset: start)
+            let count = Int(min(UInt64(limit), end - start))
+            let data = try handle.read(upToCount: count) ?? Data()
+            guard data.count == count else { return nil }
+            return Page(start: start, data: data)
+        }
+    }
+
     static func inspect<Value>(url: URL, limit: Int = tailLimit,
         parse: (Data, Data) throws -> Value?) -> Value? {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
-        defer { try? handle.close() }
-        do {
-            var before = stat()
-            guard fstat(handle.fileDescriptor, &before) == 0 else { return nil }
-            let size = try handle.seekToEnd()
+        stableRead(url: url) { handle, version in
+            let size = version.size
             guard size > 0 else { return nil }
-            try handle.seek(toOffset: 0)
             let header = try handle.read(upToCount: 64 * 1024) ?? Data()
             let start = size > UInt64(limit) ? size - UInt64(limit) : 0
             try handle.seek(toOffset: start)
@@ -23,14 +60,21 @@ enum SessionLogSnapshot {
                 guard let newline = data.firstIndex(of: 10) else { return nil }
                 data = Data(data.suffix(from: data.index(after: newline)))
             }
-            guard let value = try parse(header, data) else { return nil }
-            var after = stat()
-            guard lstat(url.path, &after) == 0,
-                  before.st_dev == after.st_dev, before.st_ino == after.st_ino,
-                  before.st_size == after.st_size,
-                  before.st_mtimespec.tv_sec == after.st_mtimespec.tv_sec,
-                  before.st_mtimespec.tv_nsec == after.st_mtimespec.tv_nsec,
-                  try handle.seekToEnd() == size else { return nil }
+            return try parse(header, data)
+        }
+    }
+
+    private static func stableRead<Value>(url: URL,
+        read: (FileHandle, Version) throws -> Value?) -> Value? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        do {
+            var before = stat()
+            guard fstat(handle.fileDescriptor, &before) == 0 else { return nil }
+            let initial = Version(before)
+            guard let value = try read(handle, initial),
+                  version(url: url) == initial,
+                  try handle.seekToEnd() == initial.size else { return nil }
             return value
         } catch { return nil }
     }
