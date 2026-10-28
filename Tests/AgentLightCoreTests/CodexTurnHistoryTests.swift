@@ -210,7 +210,11 @@ func replayLocalStateSnapshot() throws {
     let liveKey = AgentSessionKey(provider: .codex, sessionID: live)
     #expect(before.sessions[endedKey] != nil)
     #expect(before.sessions[liveKey] != nil)
-    let after = try AgentStateFile(url: url).load()
+    let file = AgentStateFile(url: url)
+    var after = try file.load()
+    for _ in 0..<512 where after.sessions[endedKey] != nil {
+        after = try file.load()
+    }
     #expect(after.sessions[endedKey] == nil)
     #expect(after.sessions[liveKey] == before.sessions[liveKey])
     #expect(after.sessions.count == before.sessions.count - 1)

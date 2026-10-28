@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Recover Claude task anchors across bounded log pages instead of requiring a whole turn in the final two MiB. Validate one unchanged file version through completion, discard progress after file changes, rebuild after restart, and follow nonterminal API-retry metadata without treating it as completion.
 - Verify Claude completion through its parent chain when attached response metadata has a later timestamp than the response. Preserve hook/request time fences, pending-tool checks and rejection of unrelated or subsequent activity.
 - Handle Claude Code StopFailure and verify ending hooks against bounded root-session evidence. Reconcile missed endings while the owner remains alive, preserve newer requests and long tasks, and ignore subagent endings. Share snapshot inspection with Codex without changing its cleanup rules.
 - Track successful NuPhy and AULA writes even when the desired state changes during confirmation, preventing stuck completion lights and duplicate sends after revision-only updates. Preserve old-connection rejection and AULA pause checks.

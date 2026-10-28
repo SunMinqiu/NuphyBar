@@ -21,7 +21,7 @@ NuphyBar 是一个轻量的原生 macOS 菜单栏应用。它汇总 Codex、Clau
 | 版本 | 包含的功能 |
 |---|---|
 | [已发布的 v0.5.9](https://github.com/itsmaiGe/NuphyBar/releases/tag/v0.5.9) | Air60 V2 ANSI 蓝牙支持；提供 macOS 安装包和 `stable-v7` 固件 |
-| 当前源码，应用版本 0.5.19 | 新增 Halo75 V2 ANSI USB／蓝牙、AULA F99 Pro 蓝牙、进程退出及任务结束漏报清理、Codex Interrupt 处理和恢复诊断；需要自行构建 |
+| 当前源码，应用版本 0.5.20 | 新增 Halo75 V2 ANSI USB／蓝牙、AULA F99 Pro 蓝牙、进程退出及任务结束漏报清理、Codex Interrupt 处理和恢复诊断；需要自行构建 |
 
 **v0.5.9 下载包不包含 Halo75 和 AULA 的新增功能。** 新机型的贡献者实测记录与待完成验证见下文。源码合并不代表已经发布新版安装包。
 
@@ -124,6 +124,8 @@ NuPhy 在系统唤醒或报告失败后重建连接，并以受控间隔重试�
 
 Claude Code 同样使用五秒核对。StopFailure 处理 API 错误，不把可恢复的工具错误当成任务结束。Claude 的结束事件没有可靠轮次 ID，因此必须核实同一主会话的请求链和终止元数据。只有正常 end_turn 或明确标记的 API 错误响应，且晚于最近活动、后面没有新请求、响应片段、排队事件或未完成工具调用，才结束记录。子代理记录及 hooks 不结束父任务。旧结束事件和通知不能复活已关闭的会话，也不能清掉新请求。近期的完成或错误提示仍短暂保留，已过去很久的结束直接恢复待机，不重放提示。日志缺失、不完整、读取中变化或格式不认识时，保留任务。两种接入共用限量快照读取，不保存消息正文或 API 错误详情；Claude 会话文件路径和事件时间作为本地生命周期元数据保存。
 
+Claude 每次核对最多读取两 MiB，先分块向前找最近的主请求，再沿链向文件末尾核对；内存只保留扫描进度和生命周期元数据。长任务可以跨任意数量的块。文件身份、大小或修改时间变化后丢弃进度，重启后重新恢复证据。只有核对到同一个未变化文件版本的末尾，才接受结束。API 重试和系统提示可以连接任务链，但不能结束任务。单条记录大于一个读取块时仍不支持，保留活动状态。
+
 损坏的状态文件会保留并报错，不会静默覆盖。在**键盘 → 恢复诊断 → 导出**可保存有数量上限的本地日志，包含连接变化和发送结果。日志中的会话／轮次标识经过哈希处理，不记录提示词、对话正文或工具内容。HID 写入成功仅代表 macOS 接受报告，不代表已经观测到实机 LED。
 
 ## 构建与测试
@@ -140,7 +142,7 @@ swift build -c release
 ./script/package_release.sh
 ```
 
-Swift 包包含 `AgentLightCore` 库、`agent-light` 辅助程序和 `NuphyBar` 应用。当前打包输出为 `dist/NuphyBar-0.5.19-macOS-arm64.dmg`。只构建应用可运行 `./script/build_app.sh`；需要安装并启动时使用 `./script/build_and_run.sh`。
+Swift 包包含 `AgentLightCore` 库、`agent-light` 辅助程序和 `NuphyBar` 应用。当前打包输出为 `dist/NuphyBar-0.5.20-macOS-arm64.dmg`。只构建应用可运行 `./script/build_app.sh`；需要安装并启动时使用 `./script/build_and_run.sh`。
 
 如果 Command Line Tools 默认 SDK 缺少 SwiftUI 宏插件，可用 `swift test --sdk /path/to/MacOSX.sdk` 指定已安装且兼容的 SDK，并在 release 构建时使用相同 SDK。这属于工具链配置问题，无需为此删除应用中的 SwiftUI 状态代码。
 

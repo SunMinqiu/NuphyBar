@@ -21,7 +21,7 @@ It does not read keystrokes, save prompts or responses, or send data to a server
 | Version | What it includes |
 |---|---|
 | [Published v0.5.9](https://github.com/itsmaiGe/NuphyBar/releases/tag/v0.5.9) | Air60 V2 ANSI over Bluetooth; downloadable macOS app and `stable-v7` firmware |
-| Current source, app version 0.5.19 | Adds Halo75 V2 ANSI USB/Bluetooth, AULA F99 Pro Bluetooth, task-owner and missed-ending cleanup, Codex Interrupt handling, and recovery diagnostics; build from source |
+| Current source, app version 0.5.20 | Adds Halo75 V2 ANSI USB/Bluetooth, AULA F99 Pro Bluetooth, task-owner and missed-ending cleanup, Codex Interrupt handling, and recovery diagnostics; build from source |
 
 The Halo75 and AULA additions are **not included in the v0.5.9 download**. Their contributor-reported hardware checks and remaining release checks are described below. Source availability is not a new binary release.
 
@@ -124,6 +124,8 @@ If a Codex ending hook is missed, the app also checks the matching local rollout
 
 Claude Code also uses the five-second reconciliation. StopFailure handles API errors, not recoverable tool errors. Because Claude endings lack a reliable turn ID, ending hooks are checked against the matching root session's request chain and terminal metadata. Normal end_turn or a marked API-error response can end a record only after its latest activity, with no subsequent request, response fragment, queue event, or unresolved tool call. Subagent records and hooks do not end the parent. Old endings and notifications cannot revive a closed session or end a newer request. Recent completion/error indications retain their existing short duration; already-old endings restore idle without replaying the indication. Missing, partial, changed, or unrecognized logs preserve work. Reads share the same bounded snapshot implementation as Codex; no message text or API-error details are retained. Claude transcript paths and event timestamps are saved as local lifecycle metadata.
 
+Claude reads at most two MiB per check. It searches backwards for the latest root request, then verifies forward to the end, retaining only scan progress and lifecycle metadata in memory. Long turns can span any number of pages. Progress is discarded after file identity, size or modification time changes; restart rebuilds the evidence. An ending is accepted only after the entire scan reaches the end of that same unchanged file version. API-retry and informational system records extend the chain but cannot end work. Individual records larger than a page remain unsupported and preserve active state.
+
 Damaged state files are preserved and reported instead of silently overwritten. **Keyboard → Recovery Diagnostics → Export** saves a bounded local journal of connection transitions and delivery results. Session/turn identifiers are hashed in that journal; prompts, transcripts, and tool content are not recorded. A successful HID write confirms macOS accepted a report, not that a physical LED displayed it.
 
 ## Build and test
@@ -140,7 +142,7 @@ swift build -c release
 ./script/package_release.sh
 ```
 
-The package contains the `AgentLightCore` library, `agent-light` helper, and `NuphyBar` app. Packaging currently writes `dist/NuphyBar-0.5.19-macOS-arm64.dmg`. To build an app bundle only, run `./script/build_app.sh`; to install and launch locally, use `./script/build_and_run.sh`.
+The package contains the `AgentLightCore` library, `agent-light` helper, and `NuphyBar` app. Packaging currently writes `dist/NuphyBar-0.5.20-macOS-arm64.dmg`. To build an app bundle only, run `./script/build_app.sh`; to install and launch locally, use `./script/build_and_run.sh`.
 
 If a Command Line Tools installation defaults to an SDK whose SwiftUI macro plugin is missing, select a compatible installed SDK with `swift test --sdk /path/to/MacOSX.sdk` and use the same SDK for the release build. This is a toolchain setup issue; do not remove SwiftUI state from the app to work around it.
 

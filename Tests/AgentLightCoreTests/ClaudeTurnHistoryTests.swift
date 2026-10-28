@@ -45,6 +45,205 @@ private func claudeEnding(error: Bool = true) throws -> String {
             reason: error ? "stop_sequence" : "end_turn", error: error)
 }
 
+private func claudeLongTurn() throws -> String {
+    var body = try claudeLine("user")
+    var parent = "prompt"
+    for step in 0..<40 {
+        let tool = "tool-\(step)"
+        let result = "result-\(step)"
+        let attachment = "attachment-\(step)"
+        body += try claudeLine("assistant", time: 901 + Double(step * 2), id: tool, parent: parent,
+            reason: "tool_use", blocks: [["type": "tool_use", "id": tool]])
+        body += try claudeLine("user", time: 902 + Double(step * 2), id: result, parent: tool,
+            blocks: [["type": "tool_result", "tool_use_id": tool]])
+        body += try claudeLine("attachment", time: 902 + Double(step * 2), id: attachment, parent: result)
+        parent = attachment
+    }
+    return body
+}
+
+private func claudeDrain(_ history: ClaudeTurnHistory, threshold: Double = 900) -> ClaudeTurnEvidence? {
+    for _ in 0..<256 {
+        if let proof = history.completion(sessionID: claudeSession, transcriptPath: nil, notBefore: threshold) {
+            return proof
+        }
+    }
+    return nil
+}
+
+@Test("Claude long turns recover their anchor across bounded pages and restart", arguments: [false, true])
+func claudeProgressiveRecovery(error: Bool) throws {
+    let fixture = try ClaudeFixture()
+    defer { fixture.remove() }
+    let body = try claudeLongTurn() + claudeLine("assistant", time: 1_000, id: "end", parent: "attachment-39",
+        reason: error ? "stop_sequence" : "end_turn", error: error)
+    try fixture.write(body)
+    let history = ClaudeTurnHistory(home: fixture.home, tailLimit: 1024)
+    #expect(history.completion(sessionID: claudeSession, transcriptPath: nil, notBefore: 900) == nil)
+    let proof = try #require(claudeDrain(history))
+    #expect(proof.status == (error ? .error : .complete))
+    #expect(proof.endedAt == 1_000)
+    #expect(claudeDrain(history, threshold: 1_001) == nil)
+    #expect(claudeDrain(ClaudeTurnHistory(home: fixture.home, tailLimit: 1024))?.endedAt == 1_000)
+}
+
+@Test("Claude paged scans never finish active or incomplete long turns",
+    arguments: ["active", "pending-tool", "new-request", "new-prompt", "unknown", "partial", "oversized"])
+func claudeProgressiveActiveWork(mode: String) throws {
+    let fixture = try ClaudeFixture()
+    defer { fixture.remove() }
+    var body = try claudeLongTurn()
+    if mode == "pending-tool" {
+        body += try claudeLine("assistant", time: 990, id: "pending", parent: "attachment-39",
+            reason: "tool_use", blocks: [["type": "tool_use", "id": "pending-tool"]])
+    }
+    if mode != "active" {
+        body += try claudeLine("assistant", time: 1_000, id: "end",
+            parent: mode == "pending-tool" ? "pending" : "attachment-39", reason: "end_turn")
+    }
+    switch mode {
+    case "new-request": body += try claudeLine("api-request", time: 1_001)
+    case "new-prompt": body += try claudeLine("user", time: 1_001, id: "next")
+    case "unknown": body += try claudeLine("unrecognized-lifecycle", time: 1_001)
+    case "partial": body += "{\"type\":"
+    case "oversized": body += try claudeLine("attachment", time: 1_001, id: "large", parent: "end",
+        extra: ["opaque": String(repeating: "x", count: 8_000)])
+    default: break
+    }
+    try fixture.write(body)
+    #expect(claudeDrain(ClaudeTurnHistory(home: fixture.home, tailLimit: 1024)) == nil)
+}
+
+@Test("Claude API retries extend the root chain without ending work", arguments: [false, true])
+func claudeProgressiveRetryChain(ended: Bool) throws {
+    let fixture = try ClaudeFixture()
+    defer { fixture.remove() }
+    var body = try claudeLongTurn()
+        + claudeLine("system", time: 990, id: "notice", parent: "attachment-39", extra: ["subtype": "informational"])
+        + claudeLine("system", time: 991, id: "retry-1", parent: "notice", extra: ["subtype": "api_error"])
+        + claudeLine("system", time: 992, id: "retry-2", parent: "retry-1", extra: ["subtype": "api_error"])
+    if ended {
+        body += try claudeLine("assistant", time: 1_000, parent: "retry-2", reason: "end_turn")
+    }
+    try fixture.write(body)
+    let proof = claudeDrain(ClaudeTurnHistory(home: fixture.home, tailLimit: 1024))
+    #expect(proof?.status == (ended ? .complete : nil))
+    try fixture.write(claudeEnding(error: false)
+        + claudeLine("system", time: 1_001, id: "retry-after", parent: "end", extra: ["subtype": "api_error"]))
+    #expect(claudeDrain(ClaudeTurnHistory(home: fixture.home, tailLimit: 1024)) == nil)
+}
+
+@Test("replay a large local Claude transcript through bounded scanning",
+    .enabled(if: ProcessInfo.processInfo.environment["NUPHYBAR_REPLAY_CLAUDE_TRANSCRIPT"] != nil))
+func replayLocalClaudeTranscript() throws {
+    let environment = ProcessInfo.processInfo.environment
+    let path = try #require(environment["NUPHYBAR_REPLAY_CLAUDE_TRANSCRIPT"])
+    let session = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+    let bytes = try #require(UInt64(environment["NUPHYBAR_REPLAY_CLAUDE_BYTES"] ?? ""))
+    let expectedEnd = try #require(Double(environment["NUPHYBAR_REPLAY_CLAUDE_END"] ?? ""))
+    let home = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: home) }
+    let project = home.appending(path: "projects/replay")
+    try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+    let destination = project.appending(path: "\(session).jsonl")
+    FileManager.default.createFile(atPath: destination.path, contents: nil)
+    let input = try FileHandle(forReadingFrom: URL(fileURLWithPath: path))
+    let output = try FileHandle(forWritingTo: destination)
+    defer { try? input.close(); try? output.close() }
+    var remaining = bytes
+    while remaining > 0 {
+        let read = try input.read(upToCount: Int(min(remaining, 2 * 1024 * 1024)))
+        let chunk = try #require(read)
+        try #require(!chunk.isEmpty)
+        try output.write(contentsOf: chunk)
+        remaining -= UInt64(chunk.count)
+    }
+    let history = ClaudeTurnHistory(home: home)
+    var proof: ClaudeTurnEvidence?
+    for _ in 0..<512 where proof == nil {
+        proof = history.completion(sessionID: session, transcriptPath: nil, notBefore: expectedEnd - 60)
+    }
+    #expect(proof?.status == .complete)
+    #expect(proof?.endedAt == expectedEnd)
+}
+
+@Test("Claude scanning discards partial evidence after append, replacement or truncation",
+    arguments: ["append", "replace", "truncate", "rewrite"])
+func claudeProgressiveSnapshotChanges(mode: String) throws {
+    let fixture = try ClaudeFixture()
+    defer { fixture.remove() }
+    let body = try claudeLongTurn() + claudeLine("assistant", time: 1_000, parent: "attachment-39", reason: "end_turn")
+    try fixture.write(body)
+    let history = ClaudeTurnHistory(home: fixture.home, tailLimit: 1024)
+    for _ in 0..<5 {
+        #expect(history.completion(sessionID: claudeSession, transcriptPath: nil, notBefore: 900) == nil)
+    }
+    switch mode {
+    case "append":
+        let handle = try FileHandle(forWritingTo: fixture.url)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data(claudeLine("api-request", time: 1_001).utf8))
+        try handle.close()
+    case "rewrite":
+        try Data((body + claudeLine("api-request", time: 1_001)).utf8).write(to: fixture.url)
+    case "replace":
+        try fixture.write(claudeLongTurn() + claudeLine("api-request", time: 1_001))
+    default:
+        try fixture.write(claudeLine("user", time: 1_001, id: "new"))
+    }
+    #expect(claudeDrain(history) == nil)
+}
+
+@Test("Claude cached completion is invalidated immediately when the file gains a new request")
+func claudeProgressiveCacheInvalidation() throws {
+    let fixture = try ClaudeFixture()
+    defer { fixture.remove() }
+    let body = try claudeLongTurn() + claudeLine("assistant", time: 1_000, parent: "attachment-39", reason: "end_turn")
+    try fixture.write(body)
+    let history = ClaudeTurnHistory(home: fixture.home, tailLimit: 1024)
+    #expect(claudeDrain(history)?.endedAt == 1_000)
+    let handle = try FileHandle(forWritingTo: fixture.url)
+    try handle.seekToEnd()
+    try handle.write(contentsOf: Data(claudeLine("api-request", time: 1_001).utf8))
+    try handle.close()
+    #expect(history.completion(sessionID: claudeSession, transcriptPath: nil, notBefore: 900) == nil)
+    #expect(claudeDrain(history) == nil)
+}
+
+@Test("Claude state reconciliation finishes a paged scan with a live owner and preserves newer work")
+func claudeProgressiveStateReconciliation() throws {
+    let fixture = try ClaudeFixture()
+    defer { fixture.remove() }
+    try fixture.write(claudeLongTurn()
+        + claudeLine("assistant", time: 1_000, parent: "attachment-39", reason: "end_turn"))
+    let history = ClaudeTurnHistory(home: fixture.home, tailLimit: 1024)
+    let file = AgentStateFile(url: fixture.home.appending(path: "state.json"), ownerStatus: { _ in .alive },
+        claudeEvidence: { session, path, threshold in
+            guard session == claudeSession else { return nil }
+            return history.completion(sessionID: session, transcriptPath: path, notBefore: threshold)
+        })
+    let owner = AgentProcessOwner(pid: 42, startedSeconds: 1, startedMicroseconds: 0)
+    let live = UUID().uuidString
+    let key = AgentSessionKey(provider: .claudeCode, sessionID: claudeSession)
+    let liveKey = AgentSessionKey(provider: .claudeCode, sessionID: live)
+    _ = try file.apply(.init(provider: .claudeCode, sessionID: claudeSession, status: .working,
+        lifecycle: .begin, owner: owner, occurredAt: 900, transcriptPath: fixture.url.path), now: 900)
+    _ = try file.apply(.init(provider: .claudeCode, sessionID: live, status: .working,
+        lifecycle: .begin, owner: owner, occurredAt: 1_100), now: 1_100)
+    var state = try file.load()
+    let liveRecord = try #require(state.sessions[liveKey])
+    #expect(state.sessions[key]?.status == .working)
+    for _ in 0..<256 where state.sessions[key] != nil { state = try file.load() }
+    #expect(state.sessions[key] == nil)
+    #expect(state.sessions[liveKey] == liveRecord)
+    _ = try file.apply(.init(provider: .claudeCode, sessionID: claudeSession, status: .working,
+        lifecycle: .activity, owner: owner, occurredAt: 1_100), now: 1_100)
+    #expect(try file.load().sessions[key] == nil)
+    _ = try file.apply(.init(provider: .claudeCode, sessionID: claudeSession, status: .working,
+        lifecycle: .begin, owner: owner, occurredAt: 1_200), now: 1_200)
+    #expect(try file.load().sessions[key]?.status == .working)
+}
+
 @Test("Claude normal completion and API failure are explicit terminal evidence", arguments: [false, true])
 func claudeTerminalEvidence(error: Bool) throws {
     let fixture = try ClaudeFixture()
